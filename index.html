@@ -534,7 +534,7 @@
     <div id="readyOverlay">
       <div class="ready-emoji">🍽️</div>
       <div class="ready-title">Your order<br />is ready!</div>
-      <div class="ready-token-num" id="readyNum">#42</div>
+      <div class="ready-token-num" id="readyNum">#67</div>
       <div class="ready-sub">
         Please head to the counter<br />to collect your food.
       </div>
@@ -604,7 +604,7 @@
             <input
               type="number"
               id="studentTokenInput"
-              placeholder="42"
+              placeholder="67"
               min="1"
               max="999"
               inputmode="numeric"
@@ -621,7 +621,7 @@
           <div class="card">
             <div class="waiting-body">
               <div class="token-caption">Your token</div>
-              <div class="token-big" id="waitTokenDisplay">42</div>
+              <div class="token-big" id="waitTokenDisplay">67</div>
               <div class="pulse-ring"></div>
               <div class="waiting-text">
                 Your order is being prepared.<br />
@@ -640,15 +640,17 @@
        ║   STAFF LOGIN VIEW   ║
        ╚══════════════════════╝ -->
       <div class="view" id="staffLoginView">
-        <button class="back-btn" onclick="showView('landingView')">← Back</button>
+        <button class="back-btn" onclick="showView('landingView')">
+          ← Back
+        </button>
 
         <div class="logo">
-          <h1>Kitchen Login</h1>
+          <h1>Admin Login</h1>
           <p>Affiliated staff access only</p>
         </div>
 
         <div class="card">
-          <span class="label">Enter Kitchen Password</span>
+          <span class="label">Enter Staff Password</span>
           <div class="password-wrapper">
             <input
               type="password"
@@ -657,11 +659,18 @@
               placeholder="••••••••"
               onkeydown="if(event.key === 'Enter') tryStaffLogin()"
             />
-            <button class="password-toggle-btn" type="button" onclick="togglePasswordVisibility('staffPasswordInput', this)" aria-label="Toggle Password Visibility">
+            <button
+              class="password-toggle-btn"
+              type="button"
+              onclick="togglePasswordVisibility('staffPasswordInput', this)"
+              aria-label="Toggle Password Visibility"
+            >
               👁️
             </button>
           </div>
-          <div id="loginErrorMsg" class="error-msg">Incorrect password. Please try again.</div>
+          <div id="loginErrorMsg" class="error-msg">
+            Incorrect password. Please try again.
+          </div>
           <div style="height: 18px"></div>
           <button class="btn btn-primary" onclick="tryStaffLogin()">
             Verify &amp; Enter →
@@ -673,24 +682,31 @@
        ║   STAFF VIEW         ║
        ╚══════════════════════╝ -->
       <div class="view" id="staffView">
-        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+        <div
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+          "
+        >
           <button class="back-btn" onclick="staffBack()">← Back</button>
           <button class="back-btn" onclick="staffLogout()">Logout 🔓</button>
         </div>
 
         <div class="logo">
-          <h1>Kitchen</h1>
-          <p>Cafe Adda — Staff dashboard</p>
+          <h1>Admin</h1>
+          <p>Cafe Adda - Staff Dashboard</p>
         </div>
 
         <!-- Add new token -->
         <div class="card">
-          <div class="section-label">Issue new token</div>
+          <div class="section-label">Issue New Token</div>
           <div class="add-row">
             <input
               type="number"
               id="newTokenInput"
-              placeholder="42"
+              placeholder="67"
               min="1"
               max="999"
               inputmode="numeric"
@@ -701,9 +717,9 @@
 
         <!-- Live queue -->
         <div class="card">
-          <div class="section-label">Active queue</div>
+          <div class="section-label">Active Queue</div>
           <div class="token-list" id="tokenList">
-            <div class="empty-msg">No active tokens</div>
+            <div class="empty-msg">No Active Tokens</div>
           </div>
         </div>
       </div>
@@ -744,6 +760,7 @@
       let activeListener = null;
       let activeRef = null;
       let buzzTimer = null;
+      let audioCtx = null;
 
       if (CONFIGURED) {
         firebase.initializeApp(firebaseConfig);
@@ -866,26 +883,39 @@
       // ── Sound: ascending chime (Web Audio API) ─────────────────
       function playChime() {
         try {
-          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          }
+          if (audioCtx.state === "suspended") {
+            audioCtx.resume();
+          }
+
+          const t = audioCtx.currentTime;
           [
             [523.25, 0],
             [659.25, 0.18],
             [783.99, 0.36],
           ].forEach(([freq, delay]) => {
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
             osc.connect(gain);
-            gain.connect(ctx.destination);
+            gain.connect(audioCtx.destination);
             osc.type = "sine";
             osc.frequency.value = freq;
-            const t = ctx.currentTime + delay;
-            osc.start(t);
-            gain.gain.setValueAtTime(0.55, t);
-            gain.gain.exponentialRampToValueAtTime(0.001, t + 1.0);
-            osc.stop(t + 1.0);
+            const startTime = t + delay;
+            osc.start(startTime);
+            gain.gain.setValueAtTime(0.55, startTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, startTime + 1.0);
+            osc.stop(startTime + 1.0);
           });
-        } catch (e) {}
-        if (navigator.vibrate) navigator.vibrate([250, 80, 250, 80, 500]);
+        } catch (e) {
+          console.error("Audio error:", e);
+        }
+
+        // Vibrate: longer, more noticeable pattern
+        if (navigator.vibrate) {
+          navigator.vibrate([500, 200, 500, 200, 800]);
+        }
       }
 
       // ── Student: start tracking ───────────────────────────────
@@ -899,6 +929,20 @@
         if (!num) {
           toast("Please enter your token number");
           return;
+        }
+
+        // Request notification permission
+        if (window.Notification && Notification.permission === "default") {
+          Notification.requestPermission();
+        }
+
+        // Pre-initialize AudioContext on user interaction to bypass browser policies
+        try {
+          if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          }
+        } catch (e) {
+          console.error("Init audio context failed:", e);
         }
 
         document.getElementById("tokenEntryCard").style.display = "none";
@@ -929,8 +973,23 @@
       function triggerReady(num) {
         document.getElementById("readyNum").textContent = "#" + num;
         document.getElementById("readyOverlay").classList.add("show");
+
+        // Send a system-level background notification
+        if (window.Notification && Notification.permission === "granted") {
+          const notification = new Notification("Cafe Adda — Order Ready! 🍽️", {
+            body: `Your token #${num} is ready! Please head to the counter to collect your food.`,
+            tag: "order-ready",
+            requireInteraction: true,
+          });
+          notification.onclick = function () {
+            window.focus();
+            this.close();
+          };
+        }
+
         playChime();
-        buzzTimer = setInterval(playChime, 5000); // keep buzzing every 5s
+        clearInterval(buzzTimer);
+        buzzTimer = setInterval(playChime, 4000); // keep buzzing every 4s
       }
 
       function dismissReady() {
