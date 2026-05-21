@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0"
+    />
+    <title>Cafe Adda — Order Buzzer</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+
+    <style>
+      :root {
+        --bg: #18120a;
+        --surface: #241a0d;
+        --surface2: #2e2110;
+        --border: #3e2e15;
+        --amber: #f5a623;
+        --amber-dk: #c47d0e;
+        --amber-gl: rgba(245, 166, 35, 0.12);
+        --text: #f0e6d3;
+        --muted: #8a7560;
+        --green: #4cae4c;
+        --green-dk: #3a943a;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html,
+      body {
+        height: 100%;
+        font-family: "DM Sans", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* ── App shell ── */
+      .app {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 28px 20px 40px;
+      }
+
+      .view {
+        display: none;
+        width: 100%;
+        max-width: 400px;
+        flex-direction: column;
+        gap: 18px;
+      }
+      .view.active {
+        display: flex;
+      }
+
+      /* ── Logo ── */
+      .logo {
+        text-align: center;
+      }
+      .logo h1 {
+        font-family: "Playfair Display", serif;
+        font-size: 2.5rem;
+        color: var(--amber);
+        letter-spacing: -0.02em;
+        line-height: 1;
+      }
+      .logo p {
+        font-size: 11px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        margin-top: 6px;
+      }
+
+      /* ── Card ── */
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        padding: 22px;
+      }
+
+      /* ── Buttons ── */
+      .btn {
+        width: 100%;
+        padding: 15px;
+        border: none;
+        border-radius: 12px;
+        font-family: "DM Sans", sans-serif;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: opacity 0.15s, transform 0.12s;
+      }
+      .btn:active {
+        transform: scale(0.98);
+      }
+
+      .btn-primary {
+        background: var(--amber);
+        color: #1a0f00;
+      }
+      .btn-primary:hover {
+        background: var(--amber-dk);
+      }
+
+      .btn-outline {
+        background: transparent;
+        border: 1.5px solid var(--border);
+        color: var(--muted);
+      }
+      .btn-outline:hover {
+        border-color: var(--amber);
+        color: var(--amber);
+      }
+
+      .btn-success {
+        background: var(--green);
+        color: #fff;
+      }
+      .btn-success:hover {
+        background: var(--green-dk);
+      }
+
+      .btn-ghost {
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        color: var(--muted);
+      }
+      .btn-ghost:hover {
+        color: var(--text);
+      }
+
+      .btn-sm {
+        padding: 8px 14px;
+        font-size: 13px;
+        border-radius: 8px;
+        width: auto;
+      }
+
+      /* ── Inputs ── */
+      .label {
+        display: block;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-bottom: 10px;
+      }
+      input[type="number"] {
+        width: 100%;
+        background: var(--surface2);
+        border: 1.5px solid var(--border);
+        border-radius: 10px;
+        padding: 13px 16px;
+        font-family: "DM Sans", sans-serif;
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--text);
+        outline: none;
+        text-align: center;
+        letter-spacing: 0.12em;
+        transition: border-color 0.15s;
+        -moz-appearance: textfield;
+      }
+      input[type="number"]::-webkit-inner-spin-button {
+        display: none;
+      }
+      input[type="number"]:focus {
+        border-color: var(--amber);
+      }
+
+      /* ── Back ── */
+      .back-btn {
+        background: none;
+        border: none;
+        color: var(--muted);
+        font-size: 13px;
+        font-family: "DM Sans", sans-serif;
+        cursor: pointer;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .back-btn:hover {
+        color: var(--text);
+      }
+
+      /* ── Landing role buttons ── */
+      .role-btn {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        background: var(--surface);
+        border: 1.5px solid var(--border);
+        border-radius: 18px;
+        padding: 20px;
+        cursor: pointer;
+        transition: border-color 0.15s, background 0.15s;
+        text-align: left;
+        width: 100%;
+      }
+      .role-btn:hover {
+        border-color: var(--amber);
+        background: var(--amber-gl);
+      }
+      .role-icon {
+        font-size: 26px;
+        width: 52px;
+        height: 52px;
+        background: var(--surface2);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+      .role-label h3 {
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .role-label p {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 3px;
+      }
+
+      /* ── Student waiting ── */
+      .waiting-body {
+        text-align: center;
+        padding: 28px 0 20px;
+      }
+      .token-big {
+        font-family: "Playfair Display", serif;
+        font-size: 5.5rem;
+        font-weight: 700;
+        color: var(--amber);
+        line-height: 1;
+      }
+      .token-caption {
+        font-size: 11px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        margin-bottom: 8px;
+      }
+      .pulse-ring {
+        width: 72px;
+        height: 72px;
+        border-radius: 50%;
+        border: 2.5px solid var(--amber);
+        margin: 22px auto;
+        animation: pulse 2s ease-in-out infinite;
+        opacity: 0.7;
+      }
+      @keyframes pulse {
+        0% {
+          transform: scale(0.85);
+          opacity: 0.8;
+        }
+        50% {
+          transform: scale(1.18);
+          opacity: 0.3;
+        }
+        100% {
+          transform: scale(0.85);
+          opacity: 0.8;
+        }
+      }
+      .waiting-text {
+        font-size: 13px;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      /* ── READY overlay ── */
+      #readyOverlay {
+        position: fixed;
+        inset: 0;
+        background: #1a6b1a;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        z-index: 999;
+        padding: 32px;
+      }
+      #readyOverlay.show {
+        display: flex;
+        animation: fadeIn 0.35s ease;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: scale(0.96);
+        }
+        to {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+
+      .ready-emoji {
+        font-size: 72px;
+        animation: pop 0.5s cubic-bezier(0.36, 1.6, 0.6, 1) 0.1s both;
+      }
+      @keyframes pop {
+        from {
+          transform: scale(0);
+        }
+        to {
+          transform: scale(1);
+        }
+      }
+      .ready-title {
+        font-family: "Playfair Display", serif;
+        font-size: 2.2rem;
+        color: #fff;
+        text-align: center;
+        line-height: 1.1;
+      }
+      .ready-token-num {
+        font-family: "Playfair Display", serif;
+        font-size: 5rem;
+        color: #fff;
+        font-weight: 700;
+      }
+      .ready-sub {
+        font-size: 15px;
+        color: rgba(255, 255, 255, 0.8);
+        text-align: center;
+        line-height: 1.5;
+      }
+      .btn-ready-dismiss {
+        background: #fff;
+        color: #1a6b1a;
+        border: none;
+        border-radius: 14px;
+        padding: 16px 44px;
+        font-size: 16px;
+        font-weight: 700;
+        font-family: "DM Sans", sans-serif;
+        cursor: pointer;
+        margin-top: 8px;
+      }
+
+      /* ── Staff queue ── */
+      .section-label {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-bottom: 12px;
+      }
+      .add-row {
+        display: flex;
+        gap: 10px;
+      }
+      .add-row input {
+        flex: 1;
+        font-size: 20px;
+        padding: 11px 14px;
+      }
+      .add-row .btn {
+        width: auto;
+        padding: 11px 18px;
+        font-size: 15px;
+      }
+
+      .token-list {
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+        max-height: 360px;
+        overflow-y: auto;
+      }
+      .token-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 13px 15px;
+        transition: opacity 0.25s;
+      }
+      .token-item.done {
+        opacity: 0.35;
+      }
+      .t-num {
+        font-family: "Playfair Display", serif;
+        font-size: 1.7rem;
+        color: var(--amber);
+        line-height: 1;
+      }
+      .t-stat {
+        font-size: 11px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        margin-top: 3px;
+      }
+      .t-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .empty-msg {
+        text-align: center;
+        padding: 28px 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      /* ── Config warning ── */
+      .config-warn {
+        background: rgba(245, 166, 35, 0.08);
+        border: 1px solid var(--amber);
+        border-radius: 12px;
+        padding: 14px 16px;
+        font-size: 13px;
+        color: var(--amber);
+        text-align: center;
+        line-height: 1.5;
+      }
+
+      /* ── Toast ── */
+      #toast {
+        position: fixed;
+        bottom: 28px;
+        left: 50%;
+        transform: translateX(-50%) translateY(100px);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 11px 20px;
+        font-size: 13px;
+        white-space: nowrap;
+        z-index: 888;
+        transition: transform 0.3s cubic-bezier(0.36, 1.3, 0.6, 1);
+      }
+      #toast.show {
+        transform: translateX(-50%) translateY(0);
+      }
+
+      /* ── Staff Login & Password Inputs ── */
+      .password-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+        width: 100%;
+      }
+      .password-input {
+        width: 100%;
+        background: var(--surface2);
+        border: 1.5px solid var(--border);
+        border-radius: 10px;
+        padding: 13px 44px 13px 16px;
+        font-family: "DM Sans", sans-serif;
+        font-size: 16px;
+        font-weight: 500;
+        color: var(--text);
+        outline: none;
+        transition: border-color 0.15s;
+      }
+      .password-input:focus {
+        border-color: var(--amber);
+      }
+      .password-toggle-btn {
+        position: absolute;
+        right: 14px;
+        background: none;
+        border: none;
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 4px;
+        outline: none;
+        user-select: none;
+      }
+      .password-toggle-btn:hover {
+        color: var(--text);
+      }
+      .error-msg {
+        color: #ff4d4d;
+        font-size: 12px;
+        margin-top: 8px;
+        display: none;
+        text-align: center;
+        line-height: 1.4;
+      }
+
+      /* scrollbar */
+      ::-webkit-scrollbar {
+        width: 3px;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  READY OVERLAY — shown to student when order is ready
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <div id="readyOverlay">
+      <div class="ready-emoji">🍽️</div>
+      <div class="ready-title">Your order<br />is ready!</div>
+      <div class="ready-token-num" id="readyNum">#42</div>
+      <div class="ready-sub">
+        Please head to the counter<br />to collect your food.
+      </div>
+      <button class="btn-ready-dismiss" onclick="dismissReady()">
+        Got it! 👍
+      </button>
+    </div>
+
+    <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  TOAST NOTIFICATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <div id="toast"></div>
+
+    <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  MAIN APP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <div class="app">
+      <!-- ╔══════════════════════╗
+       ║   LANDING VIEW       ║
+       ╚══════════════════════╝ -->
+      <div class="view active" id="landingView">
+        <div class="logo">
+          <h1>Cafe Adda</h1>
+          <p>Order Buzzer System</p>
+        </div>
+
+        <button class="role-btn" onclick="showView('studentView')">
+          <div class="role-icon">🎓</div>
+          <div class="role-label">
+            <h3>I'm a Student</h3>
+            <p>Track my order &amp; get buzzed when ready</p>
+          </div>
+        </button>
+
+        <button class="role-btn" onclick="onStaffOpen()">
+          <div class="role-icon">👨‍🍳</div>
+          <div class="role-label">
+            <h3>I'm Staff</h3>
+            <p>Manage queue &amp; notify students</p>
+          </div>
+        </button>
+
+        <div id="configWarn" style="display: none">
+          <div class="config-warn">
+            ⚠️ Firebase not configured yet.<br />
+            Open <code>index.html</code> and paste your Firebase config at the
+            top of the &lt;script&gt; section.
+          </div>
+        </div>
+      </div>
+
+      <!-- ╔══════════════════════╗
+       ║   STUDENT VIEW       ║
+       ╚══════════════════════╝ -->
+      <div class="view" id="studentView">
+        <button class="back-btn" onclick="studentBack()">← Back</button>
+
+        <div class="logo">
+          <h1>Cafe Adda</h1>
+          <p>Track your order</p>
+        </div>
+
+        <!-- Step 1: Enter token -->
+        <div id="tokenEntryCard">
+          <div class="card">
+            <span class="label">Enter your token number</span>
+            <input
+              type="number"
+              id="studentTokenInput"
+              placeholder="42"
+              min="1"
+              max="999"
+              inputmode="numeric"
+            />
+            <div style="height: 14px"></div>
+            <button class="btn btn-primary" onclick="startTracking()">
+              Track My Order →
+            </button>
+          </div>
+        </div>
+
+        <!-- Step 2: Waiting -->
+        <div id="waitingCard" style="display: none">
+          <div class="card">
+            <div class="waiting-body">
+              <div class="token-caption">Your token</div>
+              <div class="token-big" id="waitTokenDisplay">42</div>
+              <div class="pulse-ring"></div>
+              <div class="waiting-text">
+                Your order is being prepared.<br />
+                We'll buzz your phone the moment it's ready!
+              </div>
+            </div>
+            <div style="height: 8px"></div>
+            <button class="btn btn-outline" onclick="cancelTracking()">
+              Cancel tracking
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ╔══════════════════════╗
+       ║   STAFF LOGIN VIEW   ║
+       ╚══════════════════════╝ -->
+      <div class="view" id="staffLoginView">
+        <button class="back-btn" onclick="showView('landingView')">← Back</button>
+
+        <div class="logo">
+          <h1>Kitchen Login</h1>
+          <p>Affiliated staff access only</p>
+        </div>
+
+        <div class="card">
+          <span class="label">Enter Kitchen Password</span>
+          <div class="password-wrapper">
+            <input
+              type="password"
+              id="staffPasswordInput"
+              class="password-input"
+              placeholder="••••••••"
+              onkeydown="if(event.key === 'Enter') tryStaffLogin()"
+            />
+            <button class="password-toggle-btn" type="button" onclick="togglePasswordVisibility('staffPasswordInput', this)" aria-label="Toggle Password Visibility">
+              👁️
+            </button>
+          </div>
+          <div id="loginErrorMsg" class="error-msg">Incorrect password. Please try again.</div>
+          <div style="height: 18px"></div>
+          <button class="btn btn-primary" onclick="tryStaffLogin()">
+            Verify &amp; Enter →
+          </button>
+        </div>
+      </div>
+
+      <!-- ╔══════════════════════╗
+       ║   STAFF VIEW         ║
+       ╚══════════════════════╝ -->
+      <div class="view" id="staffView">
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+          <button class="back-btn" onclick="staffBack()">← Back</button>
+          <button class="back-btn" onclick="staffLogout()">Logout 🔓</button>
+        </div>
+
+        <div class="logo">
+          <h1>Kitchen</h1>
+          <p>Cafe Adda — Staff dashboard</p>
+        </div>
+
+        <!-- Add new token -->
+        <div class="card">
+          <div class="section-label">Issue new token</div>
+          <div class="add-row">
+            <input
+              type="number"
+              id="newTokenInput"
+              placeholder="42"
+              min="1"
+              max="999"
+              inputmode="numeric"
+            />
+            <button class="btn btn-primary" onclick="addToken()">+ Add</button>
+          </div>
+        </div>
+
+        <!-- Live queue -->
+        <div class="card">
+          <div class="section-label">Active queue</div>
+          <div class="token-list" id="tokenList">
+            <div class="empty-msg">No active tokens</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- /app -->
+
+    <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  JAVASCRIPT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <script>
+      // ═══════════════════════════════════════════════════════════
+      //  🔥 STEP 1 — PASTE YOUR FIREBASE CONFIG HERE
+      //  Go to: Firebase Console → your project → Project Settings
+      //  → Scroll down to "Your apps" → Web → SDK setup & config
+      //  Copy the firebaseConfig object and replace the values below
+      // ═══════════════════════════════════════════════════════════
+      const firebaseConfig = {
+        apiKey: "AIzaSyBxP7zQc9rN1aZW2d25ZJ1_TXXoCpdDmtA",
+        authDomain: "cafe-adda-87857.firebaseapp.com",
+        databaseURL:
+          "https://cafe-adda-87857-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "cafe-adda-87857",
+        storageBucket: "cafe-adda-87857.firebasestorage.app",
+        messagingSenderId: "909386239790",
+        appId: "1:909386239790:web:066753d6c6eedda33434bf",
+      };
+      // ═══════════════════════════════════════════════════════════
+      //  🔒 STAFF KITCHEN ACCESS CONFIGURATION
+      //  We use Firebase Auth to authenticate the kitchen staff.
+      //  Configure the shared staff email address here.
+      // ═══════════════════════════════════════════════════════════
+      const KITCHEN_EMAIL = "kitchen@cafeadda.com";
+      // ═══════════════════════════════════════════════════════════
+
+      // ── Init ─────────────────────────────────────────────────
+      const CONFIGURED = !!firebaseConfig.apiKey;
+      let db = null;
+      let activeListener = null;
+      let activeRef = null;
+      let buzzTimer = null;
+
+      if (CONFIGURED) {
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.database();
+        console.log("Firebase Connected");
+      } else {
+        document.getElementById("configWarn").style.display = "block";
+      }
+
+      // ── Navigation ────────────────────────────────────────────
+      function showView(id) {
+        document
+          .querySelectorAll(".view")
+          .forEach((v) => v.classList.remove("active"));
+        document.getElementById(id).classList.add("active");
+      }
+
+      function onStaffOpen() {
+        // Clear previous input/error from login view
+        document.getElementById("staffPasswordInput").value = "";
+        document.getElementById("loginErrorMsg").style.display = "none";
+
+        if (!CONFIGURED) {
+          toast("⚠️ Firebase not configured yet");
+          return;
+        }
+
+        // Check if already authenticated
+        if (firebase.auth().currentUser) {
+          showView("staffView");
+          listenToQueue();
+        } else {
+          showView("staffLoginView");
+          // Focus password input
+          setTimeout(() => {
+            document.getElementById("staffPasswordInput").focus();
+          }, 100);
+        }
+      }
+
+      function tryStaffLogin() {
+        if (!CONFIGURED) {
+          toast("⚠️ Firebase not configured yet");
+          return;
+        }
+
+        const input = document.getElementById("staffPasswordInput");
+        const errorEl = document.getElementById("loginErrorMsg");
+        const pass = input.value.trim();
+
+        if (!pass) {
+          toast("Please enter your password");
+          return;
+        }
+
+        input.disabled = true;
+
+        firebase
+          .auth()
+          .signInWithEmailAndPassword(KITCHEN_EMAIL, pass)
+          .then(() => {
+            input.disabled = false;
+            errorEl.style.display = "none";
+            showView("staffView");
+            listenToQueue();
+          })
+          .catch((error) => {
+            input.disabled = false;
+            let friendlyMsg = "Incorrect password. Please try again.";
+            if (
+              error.code === "auth/user-not-found" ||
+              error.code === "auth/invalid-email"
+            ) {
+              friendlyMsg = "Staff account is not configured in Firebase.";
+            } else if (error.code === "auth/network-request-failed") {
+              friendlyMsg = "Network error. Check your connection.";
+            }
+            errorEl.textContent = friendlyMsg;
+            errorEl.style.display = "block";
+            input.value = "";
+            input.focus();
+          });
+      }
+
+      function togglePasswordVisibility(inputId, btnEl) {
+        const input = document.getElementById(inputId);
+        if (input.type === "password") {
+          input.type = "text";
+          btnEl.textContent = "🙈";
+        } else {
+          input.type = "password";
+          btnEl.textContent = "👁️";
+        }
+      }
+
+      function studentBack() {
+        cancelTracking();
+        showView("landingView");
+      }
+
+      function staffBack() {
+        if (db) db.ref("tokens").off(); // detach staff listener
+        showView("landingView");
+      }
+
+      function staffLogout() {
+        if (!CONFIGURED) return;
+
+        firebase
+          .auth()
+          .signOut()
+          .then(() => {
+            if (db) db.ref("tokens").off(); // detach staff listener
+            toast("Logged out successfully");
+            showView("landingView");
+          })
+          .catch((e) => toast("Error: " + e.message));
+      }
+
+      // ── Sound: ascending chime (Web Audio API) ─────────────────
+      function playChime() {
+        try {
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          [
+            [523.25, 0],
+            [659.25, 0.18],
+            [783.99, 0.36],
+          ].forEach(([freq, delay]) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.type = "sine";
+            osc.frequency.value = freq;
+            const t = ctx.currentTime + delay;
+            osc.start(t);
+            gain.gain.setValueAtTime(0.55, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 1.0);
+            osc.stop(t + 1.0);
+          });
+        } catch (e) {}
+        if (navigator.vibrate) navigator.vibrate([250, 80, 250, 80, 500]);
+      }
+
+      // ── Student: start tracking ───────────────────────────────
+      function startTracking() {
+        if (!CONFIGURED) {
+          toast("⚠️ Firebase not configured yet");
+          return;
+        }
+
+        const num = document.getElementById("studentTokenInput").value.trim();
+        if (!num) {
+          toast("Please enter your token number");
+          return;
+        }
+
+        document.getElementById("tokenEntryCard").style.display = "none";
+        document.getElementById("waitingCard").style.display = "block";
+        document.getElementById("waitTokenDisplay").textContent = num;
+
+        // Attach real-time listener
+        activeRef = db.ref("tokens/" + num);
+        activeListener = activeRef.on("value", (snap) => {
+          const data = snap.val();
+          if (data && data.status === "ready") triggerReady(num);
+        });
+      }
+
+      function cancelTracking() {
+        if (activeRef && activeListener) {
+          activeRef.off("value", activeListener);
+          activeRef = null;
+          activeListener = null;
+        }
+        document.getElementById("tokenEntryCard").style.display = "block";
+        document.getElementById("waitingCard").style.display = "none";
+        document.getElementById("studentTokenInput").value = "";
+        clearInterval(buzzTimer);
+      }
+
+      // ── Ready overlay ─────────────────────────────────────────
+      function triggerReady(num) {
+        document.getElementById("readyNum").textContent = "#" + num;
+        document.getElementById("readyOverlay").classList.add("show");
+        playChime();
+        buzzTimer = setInterval(playChime, 5000); // keep buzzing every 5s
+      }
+
+      function dismissReady() {
+        document.getElementById("readyOverlay").classList.remove("show");
+        clearInterval(buzzTimer);
+        cancelTracking();
+        showView("landingView");
+      }
+
+      // ── Staff: add token ──────────────────────────────────────
+      function addToken() {
+        if (!CONFIGURED) {
+          toast("⚠️ Firebase not configured yet");
+          return;
+        }
+        const num = document.getElementById("newTokenInput").value.trim();
+        if (!num) {
+          toast("Enter a token number first");
+          return;
+        }
+
+        db.ref("tokens/" + num)
+          .set({ status: "waiting", createdAt: Date.now() })
+          .then(() => {
+            toast("Token #" + num + " added ✓");
+            document.getElementById("newTokenInput").value = "";
+          })
+          .catch((e) => toast("Error: " + e.message));
+      }
+
+      // ── Staff: mark ready (buzz student) ─────────────────────
+      function markReady(num) {
+        db.ref("tokens/" + num)
+          .update({ status: "ready" })
+          .then(() => toast("Buzzed token #" + num + " 🔔"))
+          .catch((e) => toast("Error: " + e.message));
+      }
+
+      // ── Staff: delete token ───────────────────────────────────
+      function removeToken(num) {
+        db.ref("tokens/" + num)
+          .remove()
+          .then(() => toast("Token #" + num + " removed"))
+          .catch((e) => toast("Error: " + e.message));
+      }
+
+      // ── Staff: live queue listener ────────────────────────────
+      function listenToQueue() {
+        db.ref("tokens")
+          .orderByChild("createdAt")
+          .on("value", (snap) => {
+            const list = document.getElementById("tokenList");
+            const data = snap.val();
+            if (!data) {
+              list.innerHTML = '<div class="empty-msg">No active tokens</div>';
+              return;
+            }
+
+            const sorted = Object.entries(data).sort(
+              (a, b) => a[1].createdAt - b[1].createdAt
+            );
+            list.innerHTML = sorted
+              .map(([num, info]) => {
+                const done = info.status === "ready";
+                return `
+        <div class="token-item ${done ? "done" : ""}">
+          <div>
+            <div class="t-num">#${num}</div>
+            <div class="t-stat">${done ? "✅ Buzzed" : "⏳ Waiting"}</div>
+          </div>
+          <div class="t-actions">
+            ${
+              !done
+                ? `<button class="btn btn-success btn-sm" onclick="markReady('${num}')">Ready 🔔</button>`
+                : ""
+            }
+            <button class="btn btn-ghost btn-sm" onclick="removeToken('${num}')">✕</button>
+          </div>
+        </div>`;
+              })
+              .join("");
+          });
+      }
+
+      // ── Toast helper ──────────────────────────────────────────
+      function toast(msg) {
+        const el = document.getElementById("toast");
+        el.textContent = msg;
+        el.classList.add("show");
+        setTimeout(() => el.classList.remove("show"), 2800);
+      }
+    </script>
+  </body>
+</html>
