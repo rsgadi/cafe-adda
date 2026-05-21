@@ -4,13 +4,14 @@
     <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
     <title>Cafe Adda — Order Buzzer</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
 
@@ -21,724 +22,771 @@
 
     <style>
       :root {
-        --bg: #18120a;
-        --surface: #241a0d;
-        --surface2: #2e2110;
-        --border: #3e2e15;
+        --bg-color: #0c0805;
+        --surface: rgba(30, 22, 15, 0.65);
+        --surface-hover: rgba(45, 34, 24, 0.8);
+        --surface-solid: #1e160f;
+        --border: rgba(255, 255, 255, 0.08);
+        --border-highlight: rgba(245, 166, 35, 0.3);
         --amber: #f5a623;
-        --amber-dk: #c47d0e;
-        --amber-gl: rgba(245, 166, 35, 0.12);
-        --text: #f0e6d3;
-        --muted: #8a7560;
-        --green: #4cae4c;
-        --green-dk: #3a943a;
+        --amber-dk: #d48208;
+        --amber-glow: rgba(245, 166, 35, 0.2);
+        --text-main: #fcf9f2;
+        --text-muted: #a39382;
+        --green: #22c55e;
+        --green-glow: rgba(34, 197, 94, 0.2);
+        --red: #ef4444;
       }
 
-      *,
-      *::before,
-      *::after {
+      *, *::before, *::after {
         box-sizing: border-box;
         margin: 0;
         padding: 0;
       }
 
-      html,
-      body {
+      html, body {
         height: 100%;
-        font-family: "DM Sans", sans-serif;
-        background: var(--bg);
-        color: var(--text);
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        background-color: var(--bg-color);
+        color: var(--text-main);
         -webkit-font-smoothing: antialiased;
+        overflow: hidden;
       }
 
-      /* ── App shell ── */
+      /* ── Animated Background ── */
+      .bg-canvas {
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        overflow: hidden;
+        background: radial-gradient(circle at top center, #24180d 0%, var(--bg-color) 100%);
+      }
+      .blob {
+        position: absolute;
+        filter: blur(100px);
+        border-radius: 50%;
+        opacity: 0.5;
+        animation: float 24s infinite alternate cubic-bezier(0.4, 0, 0.2, 1);
+        pointer-events: none;
+      }
+      .blob-1 {
+        top: -10%; left: -10%;
+        width: 60vw; height: 60vw;
+        background: rgba(245, 166, 35, 0.12);
+      }
+      .blob-2 {
+        bottom: -20%; right: -10%;
+        width: 70vw; height: 70vw;
+        background: rgba(163, 100, 31, 0.08);
+        animation-delay: -12s;
+      }
+      @keyframes float {
+        0% { transform: translate(0, 0) scale(1); }
+        100% { transform: translate(8%, 12%) scale(1.1); }
+      }
+
+      /* ── Layout ── */
+      .layout-container {
+        display: flex;
+        height: 100vh;
+        width: 100%;
+        position: relative;
+        z-index: 1;
+      }
+      .main-wrapper {
+        flex: 1;
+        position: relative;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+      }
       .app {
-        min-height: 100vh;
+        flex: 1;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        padding: 28px 20px 40px;
+        padding: 40px 24px;
       }
 
       .view {
         display: none;
         width: 100%;
-        max-width: 400px;
+        max-width: 440px;
         flex-direction: column;
-        gap: 18px;
+        gap: 24px;
+        opacity: 0;
+        transform: translateY(10px);
+        transition: opacity 0.4s ease, transform 0.4s ease;
       }
       .view.active {
         display: flex;
+        opacity: 1;
+        transform: translateY(0);
       }
 
-      /* ── Logo ── */
+      /* ── Typography & Logo ── */
       .logo {
         text-align: center;
+        margin-bottom: 16px;
       }
       .logo h1 {
-        font-family: "Playfair Display", serif;
-        font-size: 2.5rem;
-        color: var(--amber);
-        letter-spacing: -0.02em;
-        line-height: 1;
+        font-family: 'Playfair Display', serif;
+        font-size: 3.5rem;
+        font-weight: 700;
+        background: linear-gradient(to right bottom, #fff, #f5a623);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        letter-spacing: -0.03em;
+        line-height: 1.1;
+        text-shadow: 0 4px 24px rgba(245, 166, 35, 0.15);
       }
       .logo p {
-        font-size: 11px;
-        color: var(--muted);
+        font-size: 13px;
+        color: var(--text-muted);
         text-transform: uppercase;
-        letter-spacing: 0.12em;
-        margin-top: 6px;
+        letter-spacing: 0.2em;
+        margin-top: 8px;
+        font-weight: 600;
       }
 
-      /* ── Card ── */
+      /* ── Cards (Glassmorphism) ── */
       .card {
         background: var(--surface);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
         border: 1px solid var(--border);
-        border-radius: 18px;
-        padding: 22px;
+        border-radius: 24px;
+        padding: 32px;
+        box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        position: relative;
+        overflow: hidden;
+      }
+      .card::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0; height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
       }
 
       /* ── Buttons ── */
       .btn {
         width: 100%;
-        padding: 15px;
+        padding: 16px;
         border: none;
-        border-radius: 12px;
-        font-family: "DM Sans", sans-serif;
-        font-size: 15px;
+        border-radius: 14px;
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        font-size: 16px;
         font-weight: 600;
         cursor: pointer;
-        transition: opacity 0.15s, transform 0.12s;
+        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
       }
-      .btn:active {
-        transform: scale(0.98);
-      }
+      .btn:active { transform: scale(0.96); }
 
       .btn-primary {
-        background: var(--amber);
-        color: #1a0f00;
+        background: linear-gradient(135deg, var(--amber) 0%, var(--amber-dk) 100%);
+        color: #140d04;
+        box-shadow: 0 8px 24px var(--amber-glow), inset 0 2px 0 rgba(255, 255, 255, 0.2);
       }
       .btn-primary:hover {
-        background: var(--amber-dk);
+        transform: translateY(-2px);
+        box-shadow: 0 12px 32px var(--amber-glow), inset 0 2px 0 rgba(255, 255, 255, 0.3);
+        background: linear-gradient(135deg, #f7b74a 0%, var(--amber) 100%);
       }
 
       .btn-outline {
         background: transparent;
-        border: 1.5px solid var(--border);
-        color: var(--muted);
+        border: 1px solid var(--border);
+        color: var(--text-main);
       }
       .btn-outline:hover {
         border-color: var(--amber);
         color: var(--amber);
+        background: rgba(245, 166, 35, 0.05);
       }
 
       .btn-success {
         background: var(--green);
         color: #fff;
+        box-shadow: 0 8px 20px var(--green-glow), inset 0 2px 0 rgba(255, 255, 255, 0.2);
+        border-radius: 10px;
+        padding: 10px 16px;
+        font-size: 14px;
       }
       .btn-success:hover {
-        background: var(--green-dk);
+        background: #1eb154;
+        transform: translateY(-1px);
+        box-shadow: 0 10px 24px var(--green-glow);
       }
 
       .btn-ghost {
-        background: var(--surface2);
-        border: 1px solid var(--border);
-        color: var(--muted);
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid transparent;
+        color: var(--text-muted);
+        border-radius: 10px;
+        padding: 10px;
       }
       .btn-ghost:hover {
-        color: var(--text);
-      }
-
-      .btn-sm {
-        padding: 8px 14px;
-        font-size: 13px;
-        border-radius: 8px;
-        width: auto;
+        color: var(--red);
+        background: rgba(239, 68, 68, 0.1);
       }
 
       /* ── Inputs ── */
       .label {
         display: block;
-        font-size: 11px;
-        font-weight: 600;
-        color: var(--muted);
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        margin-bottom: 10px;
-      }
-      input[type="number"] {
-        width: 100%;
-        background: var(--surface2);
-        border: 1.5px solid var(--border);
-        border-radius: 10px;
-        padding: 13px 16px;
-        font-family: "DM Sans", sans-serif;
-        font-size: 22px;
-        font-weight: 600;
-        color: var(--text);
-        outline: none;
-        text-align: center;
-        letter-spacing: 0.12em;
-        transition: border-color 0.15s;
-        -moz-appearance: textfield;
-      }
-      input[type="number"]::-webkit-inner-spin-button {
-        display: none;
-      }
-      input[type="number"]:focus {
-        border-color: var(--amber);
-      }
-
-      /* ── Back ── */
-      .back-btn {
-        background: none;
-        border: none;
-        color: var(--muted);
         font-size: 13px;
-        font-family: "DM Sans", sans-serif;
-        cursor: pointer;
-        padding: 0;
-        display: flex;
-        align-items: center;
-        gap: 4px;
-      }
-      .back-btn:hover {
-        color: var(--text);
-      }
-
-      /* ── Landing role buttons ── */
-      .role-btn {
-        display: flex;
-        align-items: center;
-        gap: 16px;
-        background: var(--surface);
-        border: 1.5px solid var(--border);
-        border-radius: 18px;
-        padding: 20px;
-        cursor: pointer;
-        transition: border-color 0.15s, background 0.15s;
-        text-align: left;
-        width: 100%;
-      }
-      .role-btn:hover {
-        border-color: var(--amber);
-        background: var(--amber-gl);
-      }
-      .role-icon {
-        font-size: 26px;
-        width: 52px;
-        height: 52px;
-        background: var(--surface2);
-        border-radius: 12px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-      }
-      .role-label h3 {
-        font-size: 15px;
         font-weight: 600;
-      }
-      .role-label p {
-        font-size: 12px;
-        color: var(--muted);
-        margin-top: 3px;
-      }
-
-      /* ── Student waiting ── */
-      .waiting-body {
-        text-align: center;
-        padding: 28px 0 20px;
-      }
-      .token-big {
-        font-family: "Playfair Display", serif;
-        font-size: 5.5rem;
-        font-weight: 700;
-        color: var(--amber);
-        line-height: 1;
-      }
-      .token-caption {
-        font-size: 11px;
-        color: var(--muted);
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
-        margin-bottom: 8px;
-      }
-      .pulse-ring {
-        width: 72px;
-        height: 72px;
-        border-radius: 50%;
-        border: 2.5px solid var(--amber);
-        margin: 22px auto;
-        animation: pulse 2s ease-in-out infinite;
-        opacity: 0.7;
-      }
-      @keyframes pulse {
-        0% {
-          transform: scale(0.85);
-          opacity: 0.8;
-        }
-        50% {
-          transform: scale(1.18);
-          opacity: 0.3;
-        }
-        100% {
-          transform: scale(0.85);
-          opacity: 0.8;
-        }
-      }
-      .waiting-text {
-        font-size: 13px;
-        color: var(--muted);
-        line-height: 1.6;
-      }
-
-      /* ── READY overlay ── */
-      #readyOverlay {
-        position: fixed;
-        inset: 0;
-        background: #1a6b1a;
-        display: none;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 16px;
-        z-index: 999;
-        padding: 32px;
-      }
-      #readyOverlay.show {
-        display: flex;
-        animation: fadeIn 0.35s ease;
-      }
-      @keyframes fadeIn {
-        from {
-          opacity: 0;
-          transform: scale(0.96);
-        }
-        to {
-          opacity: 1;
-          transform: scale(1);
-        }
-      }
-
-      .ready-emoji {
-        font-size: 72px;
-        animation: pop 0.5s cubic-bezier(0.36, 1.6, 0.6, 1) 0.1s both;
-      }
-      @keyframes pop {
-        from {
-          transform: scale(0);
-        }
-        to {
-          transform: scale(1);
-        }
-      }
-      .ready-title {
-        font-family: "Playfair Display", serif;
-        font-size: 2.2rem;
-        color: #fff;
-        text-align: center;
-        line-height: 1.1;
-      }
-      .ready-token-num {
-        font-family: "Playfair Display", serif;
-        font-size: 5rem;
-        color: #fff;
-        font-weight: 700;
-      }
-      .ready-sub {
-        font-size: 15px;
-        color: rgba(255, 255, 255, 0.8);
-        text-align: center;
-        line-height: 1.5;
-      }
-      .btn-ready-dismiss {
-        background: #fff;
-        color: #1a6b1a;
-        border: none;
-        border-radius: 14px;
-        padding: 16px 44px;
-        font-size: 16px;
-        font-weight: 700;
-        font-family: "DM Sans", sans-serif;
-        cursor: pointer;
-        margin-top: 8px;
-      }
-
-      /* ── Staff queue ── */
-      .section-label {
-        font-size: 11px;
-        font-weight: 600;
-        color: var(--muted);
+        color: var(--text-muted);
         text-transform: uppercase;
         letter-spacing: 0.1em;
         margin-bottom: 12px;
       }
-      .add-row {
-        display: flex;
-        gap: 10px;
-      }
-      .add-row input {
-        flex: 1;
-        font-size: 20px;
-        padding: 11px 14px;
-      }
-      .add-row .btn {
-        width: auto;
-        padding: 11px 18px;
-        font-size: 15px;
-      }
-
-      .token-list {
-        display: flex;
-        flex-direction: column;
-        gap: 9px;
-        max-height: 360px;
-        overflow-y: auto;
-      }
-      .token-item {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        background: var(--surface2);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 13px 15px;
-        transition: opacity 0.25s;
-      }
-      .token-item.done {
-        opacity: 0.35;
-      }
-      .t-num {
-        font-family: "Playfair Display", serif;
-        font-size: 1.7rem;
-        color: var(--amber);
-        line-height: 1;
-      }
-      .t-stat {
-        font-size: 11px;
-        color: var(--muted);
-        text-transform: uppercase;
-        letter-spacing: 0.07em;
-        margin-top: 3px;
-      }
-      .t-actions {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-      }
-
-      .empty-msg {
-        text-align: center;
-        padding: 28px 0;
-        color: var(--muted);
-        font-size: 13px;
-      }
-
-      /* ── Config warning ── */
-      .config-warn {
-        background: rgba(245, 166, 35, 0.08);
-        border: 1px solid var(--amber);
-        border-radius: 12px;
-        padding: 14px 16px;
-        font-size: 13px;
-        color: var(--amber);
-        text-align: center;
-        line-height: 1.5;
-      }
-
-      /* ── Toast ── */
-      #toast {
-        position: fixed;
-        bottom: 28px;
-        left: 50%;
-        transform: translateX(-50%) translateY(100px);
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        padding: 11px 20px;
-        font-size: 13px;
-        white-space: nowrap;
-        z-index: 888;
-        transition: transform 0.3s cubic-bezier(0.36, 1.3, 0.6, 1);
-      }
-      #toast.show {
-        transform: translateX(-50%) translateY(0);
-      }
-
-      /* ── Staff Login & Password Inputs ── */
-      .password-wrapper {
-        position: relative;
-        display: flex;
-        align-items: center;
+      input[type="number"], input[type="password"] {
         width: 100%;
-      }
-      .password-input {
-        width: 100%;
-        background: var(--surface2);
-        border: 1.5px solid var(--border);
-        border-radius: 10px;
-        padding: 13px 44px 13px 16px;
-        font-family: "DM Sans", sans-serif;
-        font-size: 16px;
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 16px 20px;
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        font-size: 18px;
         font-weight: 500;
-        color: var(--text);
+        color: var(--text-main);
         outline: none;
-        transition: border-color 0.15s;
+        transition: all 0.3s ease;
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
       }
-      .password-input:focus {
+      input[type="number"] {
+        font-size: 28px;
+        font-weight: 700;
+        text-align: center;
+        letter-spacing: 0.1em;
+        -moz-appearance: textfield;
+      }
+      input[type="number"]::-webkit-inner-spin-button { display: none; }
+      input:focus {
         border-color: var(--amber);
+        background: rgba(20, 14, 8, 0.5);
+        box-shadow: 0 0 0 4px var(--amber-glow), inset 0 2px 4px rgba(0,0,0,0.2);
       }
-      .password-toggle-btn {
-        position: absolute;
-        right: 14px;
-        background: none;
-        border: none;
-        color: var(--muted);
+
+      /* ── Back Navigation ── */
+      .top-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+      }
+      .back-btn {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid var(--border);
+        color: var(--text-muted);
+        font-size: 14px;
+        font-weight: 500;
         cursor: pointer;
-        font-size: 16px;
+        padding: 10px 16px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.2s;
+        backdrop-filter: blur(10px);
+      }
+      .back-btn:hover {
+        color: var(--text-main);
+        background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(255, 255, 255, 0.15);
+      }
+
+      /* ── Role Selection Buttons ── */
+      .role-btn {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        background: var(--surface);
+        backdrop-filter: blur(20px);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 24px;
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        text-align: left;
+        width: 100%;
+        box-shadow: 0 12px 24px rgba(0,0,0,0.2);
+      }
+      .role-btn:hover {
+        border-color: var(--border-highlight);
+        background: var(--surface-hover);
+        transform: translateY(-4px);
+        box-shadow: 0 20px 40px rgba(0,0,0,0.4), 0 0 20px var(--amber-glow);
+      }
+      .role-icon {
+        font-size: 32px;
+        width: 64px; height: 64px;
+        background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01));
+        border-radius: 16px;
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 4px;
-        outline: none;
-        user-select: none;
+        flex-shrink: 0;
+        border: 1px solid var(--border);
+        box-shadow: inset 0 1px 0 rgba(255,255,255,0.1);
       }
-      .password-toggle-btn:hover {
-        color: var(--text);
+      .role-label h3 {
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--text-main);
+        margin-bottom: 6px;
       }
-      .error-msg {
-        color: #ff4d4d;
-        font-size: 12px;
-        margin-top: 8px;
-        display: none;
-        text-align: center;
+      .role-label p {
+        font-size: 14px;
+        color: var(--text-muted);
         line-height: 1.4;
       }
 
-      /* scrollbar */
-      ::-webkit-scrollbar {
-        width: 3px;
+      /* ── Student Waiting State ── */
+      .waiting-body {
+        text-align: center;
+        padding: 40px 0 20px;
       }
-      ::-webkit-scrollbar-thumb {
-        background: var(--border);
-        border-radius: 4px;
+      .token-big {
+        font-family: 'Playfair Display', serif;
+        font-size: 7rem;
+        font-weight: 700;
+        background: linear-gradient(to bottom right, #fff, var(--amber));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        line-height: 1;
+        margin: 10px 0;
       }
+      .pulse-ring {
+        width: 100px; height: 100px;
+        border-radius: 50%;
+        border: 2px solid var(--amber);
+        margin: 32px auto;
+        animation: pulse 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        position: relative;
+      }
+      .pulse-ring::after {
+        content: '';
+        position: absolute;
+        inset: -2px;
+        border-radius: 50%;
+        border: 2px solid var(--amber);
+        animation: pulse 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        animation-delay: 1.25s;
+      }
+      @keyframes pulse {
+        0% { transform: scale(0.6); opacity: 1; }
+        100% { transform: scale(1.6); opacity: 0; }
+      }
+      .waiting-text {
+        font-size: 15px;
+        color: var(--text-muted);
+        line-height: 1.6;
+        font-weight: 500;
+      }
+
+      /* ── READY Overlay ── */
+      #readyOverlay {
+        position: fixed; inset: 0;
+        background: rgba(14, 25, 14, 0.85);
+        backdrop-filter: blur(16px);
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        padding: 32px;
+      }
+      #readyOverlay.show {
+        display: flex;
+        animation: fadeInOverlay 0.5s ease forwards;
+      }
+      @keyframes fadeInOverlay {
+        from { opacity: 0; backdrop-filter: blur(0px); }
+        to { opacity: 1; backdrop-filter: blur(16px); }
+      }
+      .ready-content {
+        background: linear-gradient(180deg, rgba(34, 197, 94, 0.15) 0%, rgba(20, 20, 20, 0.8) 100%);
+        border: 1px solid rgba(34, 197, 94, 0.3);
+        border-radius: 32px;
+        padding: 48px;
+        text-align: center;
+        box-shadow: 0 32px 64px rgba(0,0,0,0.5), inset 0 2px 0 rgba(255,255,255,0.1);
+        transform: scale(0.9);
+        opacity: 0;
+        animation: popUp 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s forwards;
+      }
+      @keyframes popUp {
+        to { transform: scale(1); opacity: 1; }
+      }
+      .ready-emoji { font-size: 72px; margin-bottom: 24px; }
+      .ready-title {
+        font-family: 'Playfair Display', serif;
+        font-size: 3rem;
+        color: #fff;
+        line-height: 1.1;
+      }
+      .ready-token-num {
+        font-family: 'Playfair Display', serif;
+        font-size: 6rem;
+        color: var(--green);
+        font-weight: 700;
+        text-shadow: 0 12px 32px var(--green-glow);
+        margin: 16px 0;
+      }
+      .btn-ready-dismiss {
+        background: var(--green);
+        color: #fff;
+        border: none; border-radius: 16px;
+        padding: 18px 48px;
+        font-size: 18px; font-weight: 700;
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        cursor: pointer;
+        transition: all 0.3s;
+        box-shadow: 0 8px 24px var(--green-glow);
+        margin-top: 24px;
+      }
+      .btn-ready-dismiss:hover {
+        transform: translateY(-2px);
+        background: #20b857;
+      }
+
+      /* ── Staff Queue List ── */
+      .add-row { display: flex; gap: 12px; }
+      .add-row input { font-size: 20px; padding: 12px 16px; }
+      .add-row .btn { width: auto; padding: 12px 28px; }
+
+      .token-list {
+        display: flex; flex-direction: column; gap: 12px;
+        max-height: 400px; overflow-y: auto; padding-right: 8px;
+      }
+      .token-item {
+        display: flex; align-items: center; justify-content: space-between;
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 16px 20px;
+        transition: all 0.3s ease;
+      }
+      .token-item:hover {
+        background: rgba(255, 255, 255, 0.03);
+        border-color: rgba(255, 255, 255, 0.1);
+      }
+      .token-item.done { opacity: 0.4; border-color: transparent; }
+      .t-num {
+        font-family: 'Playfair Display', serif;
+        font-size: 2rem;
+        color: var(--amber);
+        font-weight: 700;
+      }
+      .t-stat {
+        font-size: 12px; color: var(--text-muted);
+        text-transform: uppercase; letter-spacing: 0.1em;
+        margin-top: 4px; font-weight: 600;
+      }
+      .t-actions { display: flex; gap: 8px; }
+
+      /* ── Sidebar Log ── */
+      .sidebar {
+        position: absolute; right: 0; top: 0;
+        width: 360px; height: 100vh;
+        background: rgba(20, 14, 9, 0.85);
+        backdrop-filter: blur(24px);
+        -webkit-backdrop-filter: blur(24px);
+        border-left: 1px solid var(--border);
+        display: none; flex-direction: column;
+        box-shadow: -12px 0 48px rgba(0,0,0,0.5);
+        z-index: 100;
+        transform: translateX(100%);
+        transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+      }
+      .sidebar.staff-active { display: flex; }
+      .sidebar.open { transform: translateX(0); }
+      
+      .sidebar-header {
+        padding: 32px 24px 24px;
+        border-bottom: 1px solid var(--border);
+      }
+      .sidebar-header h2 {
+        font-family: 'Playfair Display', serif;
+        font-size: 1.8rem;
+        color: var(--amber);
+      }
+      .sidebar-header p {
+        font-size: 12px; color: var(--text-muted);
+        text-transform: uppercase; letter-spacing: 0.1em; margin-top: 8px;
+      }
+      .sidebar-content {
+        flex: 1; overflow-y: auto; padding: 24px;
+        display: flex; flex-direction: column; gap: 16px;
+      }
+      .log-item {
+        background: rgba(0,0,0,0.3);
+        border: 1px solid var(--border);
+        padding: 16px; border-radius: 14px;
+        border-left: 4px solid var(--amber);
+      }
+      .log-item.issued { border-left-color: var(--amber); }
+      .log-item.ready { border-left-color: var(--green); }
+      .log-item.removed { border-left-color: var(--red); opacity: 0.7; }
+      .log-header {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 8px;
+      }
+      .log-title { font-weight: 600; font-size: 15px; color: var(--text-main); }
+      .log-time { font-size: 12px; color: var(--text-muted); }
+      .log-desc { font-size: 13px; color: var(--text-muted); }
+
+      .sidebar-toggle {
+        position: fixed; bottom: 32px; right: 32px;
+        background: var(--surface-solid);
+        border: 1px solid var(--border);
+        color: var(--amber);
+        width: 56px; height: 56px; border-radius: 28px;
+        display: none; align-items: center; justify-content: center;
+        font-size: 24px;
+        box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+        cursor: pointer; z-index: 101;
+        transition: all 0.3s ease;
+      }
+      .sidebar-toggle.staff-active { display: flex; }
+      .sidebar-toggle:hover {
+        border-color: var(--amber);
+        background: var(--surface-hover);
+        transform: translateY(-4px);
+      }
+      
+      /* Password toggle */
+      .password-wrapper { position: relative; display: flex; align-items: center; width: 100%; }
+      .password-input { padding-right: 50px !important; }
+      .password-toggle-btn {
+        position: absolute; right: 16px;
+        background: none; border: none; color: var(--text-muted);
+        cursor: pointer; font-size: 18px;
+      }
+      
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar { width: 6px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+      ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+      /* Toast */
+      #toast {
+        position: fixed; bottom: 40px; left: 50%;
+        transform: translateX(-50%) translateY(100px);
+        background: var(--text-main); color: var(--bg-color);
+        padding: 14px 28px; border-radius: 100px;
+        font-weight: 600; font-size: 14px;
+        box-shadow: 0 12px 32px rgba(0,0,0,0.3);
+        transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        z-index: 1000; pointer-events: none;
+      }
+      #toast.show { transform: translateX(-50%) translateY(0); }
+
+      .empty-msg { text-align: center; color: var(--text-muted); padding: 40px 0; font-size: 14px; }
+      .error-msg { color: var(--red); font-size: 13px; margin-top: 12px; display: none; text-align: center; }
+      .config-warn { background: rgba(245,166,35,0.1); border: 1px solid var(--amber); padding: 16px; border-radius: 14px; color: var(--amber); text-align: center; font-size: 13px; margin-top: 16px;}
     </style>
   </head>
   <body>
-    <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  READY OVERLAY — shown to student when order is ready
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
-    <div id="readyOverlay">
-      <div class="ready-emoji">🍽️</div>
-      <div class="ready-title">Your order<br />is ready!</div>
-      <div class="ready-token-num" id="readyNum">#42</div>
-      <div class="ready-sub">
-        Please head to the counter<br />to collect your food.
-      </div>
-      <button class="btn-ready-dismiss" onclick="dismissReady()">
-        Got it! 👍
-      </button>
+    <!-- Background Canvas -->
+    <div class="bg-canvas">
+      <div class="blob blob-1"></div>
+      <div class="blob blob-2"></div>
     </div>
 
-    <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  TOAST NOTIFICATION
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <!-- READY Overlay -->
+    <div id="readyOverlay">
+      <div class="ready-content">
+        <div class="ready-emoji">✨</div>
+        <div class="ready-title">Order Ready!</div>
+        <div class="ready-token-num" id="readyNum">#42</div>
+        <div class="waiting-text" style="color: rgba(255,255,255,0.8);">
+          Please head to the counter<br />to collect your freshly prepared order.
+        </div>
+        <button class="btn-ready-dismiss" onclick="dismissReady()">
+          Collect Order
+        </button>
+      </div>
+    </div>
+
+    <!-- Toast -->
     <div id="toast"></div>
 
-    <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  MAIN APP
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
-    <div class="app">
-      <!-- ╔══════════════════════╗
-       ║   LANDING VIEW       ║
-       ╚══════════════════════╝ -->
-      <div class="view active" id="landingView">
-        <div class="logo">
-          <h1>Cafe Adda</h1>
-          <p>Order Buzzer System</p>
-        </div>
+    <div class="layout-container">
+      <div class="main-wrapper">
+        <div class="app">
+          
+          <!-- ╔══════════════════════╗
+           ║   LANDING VIEW       ║
+           ╚══════════════════════╝ -->
+          <div class="view active" id="landingView">
+            <div class="logo">
+              <h1>Cafe Adda</h1>
+              <p>Premium Order Buzzer</p>
+            </div>
 
-        <button class="role-btn" onclick="showView('studentView')">
-          <div class="role-icon">🎓</div>
-          <div class="role-label">
-            <h3>I'm a Student</h3>
-            <p>Track my order &amp; get buzzed when ready</p>
-          </div>
-        </button>
-
-        <button class="role-btn" onclick="onStaffOpen()">
-          <div class="role-icon">👨‍🍳</div>
-          <div class="role-label">
-            <h3>I'm Staff</h3>
-            <p>Manage queue &amp; notify students</p>
-          </div>
-        </button>
-
-        <div id="configWarn" style="display: none">
-          <div class="config-warn">
-            ⚠️ Firebase not configured yet.<br />
-            Open <code>index.html</code> and paste your Firebase config at the
-            top of the &lt;script&gt; section.
-          </div>
-        </div>
-      </div>
-
-      <!-- ╔══════════════════════╗
-       ║   STUDENT VIEW       ║
-       ╚══════════════════════╝ -->
-      <div class="view" id="studentView">
-        <button class="back-btn" onclick="studentBack()">← Back</button>
-
-        <div class="logo">
-          <h1>Cafe Adda</h1>
-          <p>Track your order</p>
-        </div>
-
-        <!-- Step 1: Enter token -->
-        <div id="tokenEntryCard">
-          <div class="card">
-            <span class="label">Enter your token number</span>
-            <input
-              type="number"
-              id="studentTokenInput"
-              placeholder="42"
-              min="1"
-              max="999"
-              inputmode="numeric"
-            />
-            <div style="height: 14px"></div>
-            <button class="btn btn-primary" onclick="startTracking()">
-              Track My Order →
+            <button class="role-btn" onclick="showView('studentView')">
+              <div class="role-icon">☕</div>
+              <div class="role-label">
+                <h3>I'm a Customer</h3>
+                <p>Track your order status live</p>
+              </div>
             </button>
-          </div>
-        </div>
 
-        <!-- Step 2: Waiting -->
-        <div id="waitingCard" style="display: none">
-          <div class="card">
-            <div class="waiting-body">
-              <div class="token-caption">Your token</div>
-              <div class="token-big" id="waitTokenDisplay">42</div>
-              <div class="pulse-ring"></div>
-              <div class="waiting-text">
-                Your order is being prepared.<br />
-                We'll buzz your phone the moment it's ready!
+            <button class="role-btn" onclick="onStaffOpen()">
+              <div class="role-icon">🧑‍🍳</div>
+              <div class="role-label">
+                <h3>I'm Staff</h3>
+                <p>Manage kitchen queue</p>
+              </div>
+            </button>
+
+            <div id="configWarn" style="display: none">
+              <div class="config-warn">
+                ⚠️ Firebase not configured. Update index.html.
               </div>
             </div>
-            <div style="height: 8px"></div>
-            <button class="btn btn-outline" onclick="cancelTracking()">
-              Cancel tracking
-            </button>
           </div>
+
+          <!-- ╔══════════════════════╗
+           ║   STUDENT VIEW       ║
+           ╚══════════════════════╝ -->
+          <div class="view" id="studentView">
+            <div class="top-bar">
+              <button class="back-btn" onclick="studentBack()">← Back</button>
+            </div>
+            
+            <div class="logo">
+              <h1>Cafe Adda</h1>
+              <p>Track your order</p>
+            </div>
+
+            <div id="tokenEntryCard" class="card">
+              <span class="label">Enter your token number</span>
+              <input type="number" id="studentTokenInput" placeholder="00" min="1" max="999" />
+              <div style="height: 24px"></div>
+              <button class="btn btn-primary" onclick="startTracking()">
+                Track Order →
+              </button>
+            </div>
+
+            <div id="waitingCard" class="card" style="display: none">
+              <div class="waiting-body">
+                <div class="label">Your Token</div>
+                <div class="token-big" id="waitTokenDisplay">00</div>
+                <div class="pulse-ring"></div>
+                <div class="waiting-text">
+                  We're preparing your order.<br />
+                  Keep this screen open, we'll buzz you!
+                </div>
+              </div>
+              <div style="height: 16px"></div>
+              <button class="btn btn-outline" onclick="cancelTracking()">
+                Cancel Tracking
+              </button>
+            </div>
+          </div>
+
+          <!-- ╔══════════════════════╗
+           ║   STAFF LOGIN VIEW   ║
+           ╚══════════════════════╝ -->
+          <div class="view" id="staffLoginView">
+            <div class="top-bar">
+              <button class="back-btn" onclick="showView('landingView')">← Back</button>
+            </div>
+
+            <div class="logo">
+              <h1>Kitchen</h1>
+              <p>Staff Access</p>
+            </div>
+
+            <div class="card">
+              <span class="label">Passcode</span>
+              <div class="password-wrapper">
+                <input type="password" id="staffPasswordInput" class="password-input" placeholder="••••••••" onkeydown="if(event.key === 'Enter') tryStaffLogin()" />
+                <button class="password-toggle-btn" type="button" onclick="togglePasswordVisibility('staffPasswordInput', this)">👁️</button>
+              </div>
+              <div id="loginErrorMsg" class="error-msg">Incorrect password.</div>
+              <div style="height: 24px"></div>
+              <button class="btn btn-primary" onclick="tryStaffLogin()">
+                Secure Login →
+              </button>
+            </div>
+          </div>
+
+          <!-- ╔══════════════════════╗
+           ║   STAFF VIEW         ║
+           ╚══════════════════════╝ -->
+          <div class="view" id="staffView">
+            <div class="top-bar">
+              <button class="back-btn" onclick="staffBack()">← Exit</button>
+              <button class="back-btn" style="color: var(--amber)" onclick="staffLogout()">Logout 🔓</button>
+            </div>
+
+            <div class="logo">
+              <h1 style="font-size: 2.8rem">Dashboard</h1>
+              <p>Live Order Queue</p>
+            </div>
+
+            <div class="card" style="padding: 24px">
+              <div class="label">Issue New Token</div>
+              <div class="add-row">
+                <input type="number" id="newTokenInput" placeholder="No." />
+                <button class="btn btn-primary" onclick="addToken()">Add Queue</button>
+              </div>
+            </div>
+
+            <div class="card" style="padding: 24px">
+              <div class="label" style="display:flex; justify-content:space-between">
+                <span>Active Tokens</span>
+                <span style="color: var(--amber)">Live</span>
+              </div>
+              <div class="token-list" id="tokenList">
+                <div class="empty-msg">No active orders</div>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
 
-      <!-- ╔══════════════════════╗
-       ║   STAFF LOGIN VIEW   ║
-       ╚══════════════════════╝ -->
-      <div class="view" id="staffLoginView">
-        <button class="back-btn" onclick="showView('landingView')">← Back</button>
-
-        <div class="logo">
-          <h1>Kitchen Login</h1>
-          <p>Affiliated staff access only</p>
+      <!-- Sidebar Log -->
+      <div class="sidebar" id="appSidebar">
+        <div class="sidebar-header">
+          <h2>Session Logs</h2>
+          <p>Today's Activity Timeline</p>
         </div>
-
-        <div class="card">
-          <span class="label">Enter Kitchen Password</span>
-          <div class="password-wrapper">
-            <input
-              type="password"
-              id="staffPasswordInput"
-              class="password-input"
-              placeholder="••••••••"
-              onkeydown="if(event.key === 'Enter') tryStaffLogin()"
-            />
-            <button class="password-toggle-btn" type="button" onclick="togglePasswordVisibility('staffPasswordInput', this)" aria-label="Toggle Password Visibility">
-              👁️
-            </button>
-          </div>
-          <div id="loginErrorMsg" class="error-msg">Incorrect password. Please try again.</div>
-          <div style="height: 18px"></div>
-          <button class="btn btn-primary" onclick="tryStaffLogin()">
-            Verify &amp; Enter →
-          </button>
+        <div class="sidebar-content" id="logContent">
+          <!-- Logs injected here -->
         </div>
       </div>
 
-      <!-- ╔══════════════════════╗
-       ║   STAFF VIEW         ║
-       ╚══════════════════════╝ -->
-      <div class="view" id="staffView">
-        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-          <button class="back-btn" onclick="staffBack()">← Back</button>
-          <button class="back-btn" onclick="staffLogout()">Logout 🔓</button>
-        </div>
+      <button class="sidebar-toggle" onclick="toggleSidebar()">
+        📋
+      </button>
 
-        <div class="logo">
-          <h1>Kitchen</h1>
-          <p>Cafe Adda — Staff dashboard</p>
-        </div>
-
-        <!-- Add new token -->
-        <div class="card">
-          <div class="section-label">Issue new token</div>
-          <div class="add-row">
-            <input
-              type="number"
-              id="newTokenInput"
-              placeholder="42"
-              min="1"
-              max="999"
-              inputmode="numeric"
-            />
-            <button class="btn btn-primary" onclick="addToken()">+ Add</button>
-          </div>
-        </div>
-
-        <!-- Live queue -->
-        <div class="card">
-          <div class="section-label">Active queue</div>
-          <div class="token-list" id="tokenList">
-            <div class="empty-msg">No active tokens</div>
-          </div>
-        </div>
-      </div>
     </div>
-    <!-- /app -->
 
-    <!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  JAVASCRIPT
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <!-- Scripts -->
     <script>
-      // ═══════════════════════════════════════════════════════════
-      //  🔥 STEP 1 — PASTE YOUR FIREBASE CONFIG HERE
-      //  Go to: Firebase Console → your project → Project Settings
-      //  → Scroll down to "Your apps" → Web → SDK setup & config
-      //  Copy the firebaseConfig object and replace the values below
-      // ═══════════════════════════════════════════════════════════
       const firebaseConfig = {
         apiKey: "AIzaSyBxP7zQc9rN1aZW2d25ZJ1_TXXoCpdDmtA",
         authDomain: "cafe-adda-87857.firebaseapp.com",
-        databaseURL:
-          "https://cafe-adda-87857-default-rtdb.asia-southeast1.firebasedatabase.app",
+        databaseURL: "https://cafe-adda-87857-default-rtdb.asia-southeast1.firebasedatabase.app",
         projectId: "cafe-adda-87857",
         storageBucket: "cafe-adda-87857.firebasestorage.app",
         messagingSenderId: "909386239790",
         appId: "1:909386239790:web:066753d6c6eedda33434bf",
       };
-      // ═══════════════════════════════════════════════════════════
-      //  🔒 STAFF KITCHEN ACCESS CONFIGURATION
-      //  We use Firebase Auth to authenticate the kitchen staff.
-      //  Configure the shared staff email address here.
-      // ═══════════════════════════════════════════════════════════
       const KITCHEN_EMAIL = "kitchen@cafeadda.com";
-      // ═══════════════════════════════════════════════════════════
 
-      // ── Init ─────────────────────────────────────────────────
       const CONFIGURED = !!firebaseConfig.apiKey;
       let db = null;
       let activeListener = null;
@@ -748,166 +796,155 @@
       if (CONFIGURED) {
         firebase.initializeApp(firebaseConfig);
         db = firebase.database();
-        console.log("Firebase Connected");
       } else {
         document.getElementById("configWarn").style.display = "block";
       }
 
-      // ── Navigation ────────────────────────────────────────────
+      /* Logging */
+      let sessionLogs = [];
+      const LOG_KEY = "cafeAdda_sessionLogs";
+
+      function initLogs() {
+        const stored = localStorage.getItem(LOG_KEY);
+        if (stored) {
+          try {
+            sessionLogs = JSON.parse(stored);
+            const today = new Date().toDateString();
+            sessionLogs = sessionLogs.filter(log => new Date(log.timestamp).toDateString() === today);
+          } catch(e) { sessionLogs = []; }
+        }
+        renderLogs();
+      }
+
+      function addLog(num, action) {
+        sessionLogs.push({ num, action, timestamp: Date.now() });
+        localStorage.setItem(LOG_KEY, JSON.stringify(sessionLogs));
+        renderLogs();
+      }
+
+      function renderLogs() {
+        const logSidebar = document.getElementById('logContent');
+        if (!logSidebar) return;
+        if (sessionLogs.length === 0) {
+          logSidebar.innerHTML = '<div class="empty-msg">No activity yet.</div>';
+          return;
+        }
+        const sorted = [...sessionLogs].sort((a, b) => b.timestamp - a.timestamp);
+        logSidebar.innerHTML = sorted.map(log => {
+          let c = '', i = '', d = '';
+          if (log.action === 'Issued') { c = 'issued'; i = '📝'; d = 'Added to queue'; }
+          if (log.action === 'Ready') { c = 'ready'; i = '✨'; d = 'Marked as ready'; }
+          if (log.action === 'Removed') { c = 'removed'; i = '✕'; d = 'Cleared from queue'; }
+          const t = new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          return `<div class="log-item ${c}">
+            <div class="log-header">
+              <span class="log-title">${i} Token #${log.num}</span>
+              <span class="log-time">${t}</span>
+            </div>
+            <div class="log-desc">${d}</div>
+          </div>`;
+        }).join('');
+      }
+
+      function toggleSidebar() { document.getElementById('appSidebar').classList.toggle('open'); }
+
+      /* Views */
       function showView(id) {
-        document
-          .querySelectorAll(".view")
-          .forEach((v) => v.classList.remove("active"));
-        document.getElementById(id).classList.add("active");
+        document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
+        // Small delay for animation trigger
+        setTimeout(() => document.getElementById(id).classList.add("active"), 50);
+
+        const isStaff = id === 'staffView';
+        const sidebar = document.getElementById('appSidebar');
+        const toggleBtn = document.querySelector('.sidebar-toggle');
+        if (sidebar && toggleBtn) {
+          sidebar.classList.toggle('staff-active', isStaff);
+          toggleBtn.classList.toggle('staff-active', isStaff);
+          if (!isStaff) sidebar.classList.remove('open');
+        }
       }
 
       function onStaffOpen() {
-        // Clear previous input/error from login view
         document.getElementById("staffPasswordInput").value = "";
         document.getElementById("loginErrorMsg").style.display = "none";
-
-        if (!CONFIGURED) {
-          toast("⚠️ Firebase not configured yet");
-          return;
-        }
-
-        // Check if already authenticated
+        if (!CONFIGURED) return toast("⚠️ Firebase not configured yet");
+        
         if (firebase.auth().currentUser) {
-          showView("staffView");
-          listenToQueue();
+          showView("staffView"); listenToQueue();
         } else {
           showView("staffLoginView");
-          // Focus password input
-          setTimeout(() => {
-            document.getElementById("staffPasswordInput").focus();
-          }, 100);
+          setTimeout(() => document.getElementById("staffPasswordInput").focus(), 100);
         }
       }
 
       function tryStaffLogin() {
-        if (!CONFIGURED) {
-          toast("⚠️ Firebase not configured yet");
-          return;
-        }
-
+        if (!CONFIGURED) return toast("⚠️ Firebase not configured");
         const input = document.getElementById("staffPasswordInput");
-        const errorEl = document.getElementById("loginErrorMsg");
+        const err = document.getElementById("loginErrorMsg");
         const pass = input.value.trim();
-
-        if (!pass) {
-          toast("Please enter your password");
-          return;
-        }
-
+        if (!pass) return toast("Enter password");
+        
         input.disabled = true;
-
-        firebase
-          .auth()
-          .signInWithEmailAndPassword(KITCHEN_EMAIL, pass)
+        firebase.auth().signInWithEmailAndPassword(KITCHEN_EMAIL, pass)
           .then(() => {
-            input.disabled = false;
-            errorEl.style.display = "none";
-            showView("staffView");
-            listenToQueue();
+            input.disabled = false; err.style.display = "none";
+            showView("staffView"); listenToQueue();
           })
-          .catch((error) => {
+          .catch(e => {
             input.disabled = false;
-            let friendlyMsg = "Incorrect password. Please try again.";
-            if (
-              error.code === "auth/user-not-found" ||
-              error.code === "auth/invalid-email"
-            ) {
-              friendlyMsg = "Staff account is not configured in Firebase.";
-            } else if (error.code === "auth/network-request-failed") {
-              friendlyMsg = "Network error. Check your connection.";
-            }
-            errorEl.textContent = friendlyMsg;
-            errorEl.style.display = "block";
-            input.value = "";
-            input.focus();
+            err.textContent = "Incorrect passcode or connection error.";
+            err.style.display = "block";
+            input.value = ""; input.focus();
           });
       }
 
-      function togglePasswordVisibility(inputId, btnEl) {
-        const input = document.getElementById(inputId);
-        if (input.type === "password") {
-          input.type = "text";
-          btnEl.textContent = "🙈";
-        } else {
-          input.type = "password";
-          btnEl.textContent = "👁️";
-        }
+      function togglePasswordVisibility(id, btn) {
+        const input = document.getElementById(id);
+        if (input.type === "password") { input.type = "text"; btn.textContent = "🙈"; }
+        else { input.type = "password"; btn.textContent = "👁️"; }
       }
 
-      function studentBack() {
-        cancelTracking();
-        showView("landingView");
-      }
-
-      function staffBack() {
-        if (db) db.ref("tokens").off(); // detach staff listener
-        showView("landingView");
-      }
-
+      function studentBack() { cancelTracking(); showView("landingView"); }
+      function staffBack() { if(db) db.ref("tokens").off(); showView("landingView"); }
       function staffLogout() {
         if (!CONFIGURED) return;
-
-        firebase
-          .auth()
-          .signOut()
-          .then(() => {
-            if (db) db.ref("tokens").off(); // detach staff listener
-            toast("Logged out successfully");
-            showView("landingView");
-          })
-          .catch((e) => toast("Error: " + e.message));
+        firebase.auth().signOut().then(() => {
+          if(db) db.ref("tokens").off();
+          toast("Logged out securely"); showView("landingView");
+        });
       }
 
-      // ── Sound: ascending chime (Web Audio API) ─────────────────
+      /* Audio Chime */
       function playChime() {
         try {
           const ctx = new (window.AudioContext || window.webkitAudioContext)();
-          [
-            [523.25, 0],
-            [659.25, 0.18],
-            [783.99, 0.36],
-          ].forEach(([freq, delay]) => {
+          [[523.25, 0], [659.25, 0.15], [880.00, 0.3]].forEach(([f, d]) => {
             const osc = ctx.createOscillator();
             const gain = ctx.createGain();
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.type = "sine";
-            osc.frequency.value = freq;
-            const t = ctx.currentTime + delay;
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.type = "sine"; osc.frequency.value = f;
+            const t = ctx.currentTime + d;
             osc.start(t);
-            gain.gain.setValueAtTime(0.55, t);
-            gain.gain.exponentialRampToValueAtTime(0.001, t + 1.0);
-            osc.stop(t + 1.0);
+            gain.gain.setValueAtTime(0.4, t);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
+            osc.stop(t + 1.2);
           });
         } catch (e) {}
-        if (navigator.vibrate) navigator.vibrate([250, 80, 250, 80, 500]);
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
       }
 
-      // ── Student: start tracking ───────────────────────────────
+      /* Tracking */
       function startTracking() {
-        if (!CONFIGURED) {
-          toast("⚠️ Firebase not configured yet");
-          return;
-        }
-
+        if (!CONFIGURED) return toast("⚠️ Firebase not configured");
         const num = document.getElementById("studentTokenInput").value.trim();
-        if (!num) {
-          toast("Please enter your token number");
-          return;
-        }
+        if (!num) return toast("Please enter your token");
 
         document.getElementById("tokenEntryCard").style.display = "none";
         document.getElementById("waitingCard").style.display = "block";
         document.getElementById("waitTokenDisplay").textContent = num;
 
-        // Attach real-time listener
         activeRef = db.ref("tokens/" + num);
-        activeListener = activeRef.on("value", (snap) => {
+        activeListener = activeRef.on("value", snap => {
           const data = snap.val();
           if (data && data.status === "ready") triggerReady(num);
         });
@@ -916,8 +953,7 @@
       function cancelTracking() {
         if (activeRef && activeListener) {
           activeRef.off("value", activeListener);
-          activeRef = null;
-          activeListener = null;
+          activeRef = null; activeListener = null;
         }
         document.getElementById("tokenEntryCard").style.display = "block";
         document.getElementById("waitingCard").style.display = "none";
@@ -925,103 +961,73 @@
         clearInterval(buzzTimer);
       }
 
-      // ── Ready overlay ─────────────────────────────────────────
       function triggerReady(num) {
         document.getElementById("readyNum").textContent = "#" + num;
         document.getElementById("readyOverlay").classList.add("show");
         playChime();
-        buzzTimer = setInterval(playChime, 5000); // keep buzzing every 5s
+        buzzTimer = setInterval(playChime, 6000);
       }
 
       function dismissReady() {
         document.getElementById("readyOverlay").classList.remove("show");
-        clearInterval(buzzTimer);
-        cancelTracking();
-        showView("landingView");
+        clearInterval(buzzTimer); cancelTracking(); showView("landingView");
       }
 
-      // ── Staff: add token ──────────────────────────────────────
+      /* Queue Management */
       function addToken() {
-        if (!CONFIGURED) {
-          toast("⚠️ Firebase not configured yet");
-          return;
-        }
+        if (!CONFIGURED) return;
         const num = document.getElementById("newTokenInput").value.trim();
-        if (!num) {
-          toast("Enter a token number first");
-          return;
-        }
-
-        db.ref("tokens/" + num)
-          .set({ status: "waiting", createdAt: Date.now() })
+        if (!num) return toast("Enter token number");
+        db.ref("tokens/" + num).set({ status: "waiting", createdAt: Date.now() })
           .then(() => {
-            toast("Token #" + num + " added ✓");
+            toast(`Token #${num} added`);
             document.getElementById("newTokenInput").value = "";
-          })
-          .catch((e) => toast("Error: " + e.message));
-      }
-
-      // ── Staff: mark ready (buzz student) ─────────────────────
-      function markReady(num) {
-        db.ref("tokens/" + num)
-          .update({ status: "ready" })
-          .then(() => toast("Buzzed token #" + num + " 🔔"))
-          .catch((e) => toast("Error: " + e.message));
-      }
-
-      // ── Staff: delete token ───────────────────────────────────
-      function removeToken(num) {
-        db.ref("tokens/" + num)
-          .remove()
-          .then(() => toast("Token #" + num + " removed"))
-          .catch((e) => toast("Error: " + e.message));
-      }
-
-      // ── Staff: live queue listener ────────────────────────────
-      function listenToQueue() {
-        db.ref("tokens")
-          .orderByChild("createdAt")
-          .on("value", (snap) => {
-            const list = document.getElementById("tokenList");
-            const data = snap.val();
-            if (!data) {
-              list.innerHTML = '<div class="empty-msg">No active tokens</div>';
-              return;
-            }
-
-            const sorted = Object.entries(data).sort(
-              (a, b) => a[1].createdAt - b[1].createdAt
-            );
-            list.innerHTML = sorted
-              .map(([num, info]) => {
-                const done = info.status === "ready";
-                return `
-        <div class="token-item ${done ? "done" : ""}">
-          <div>
-            <div class="t-num">#${num}</div>
-            <div class="t-stat">${done ? "✅ Buzzed" : "⏳ Waiting"}</div>
-          </div>
-          <div class="t-actions">
-            ${
-              !done
-                ? `<button class="btn btn-success btn-sm" onclick="markReady('${num}')">Ready 🔔</button>`
-                : ""
-            }
-            <button class="btn btn-ghost btn-sm" onclick="removeToken('${num}')">✕</button>
-          </div>
-        </div>`;
-              })
-              .join("");
+            addLog(num, "Issued");
           });
       }
 
-      // ── Toast helper ──────────────────────────────────────────
+      function markReady(num) {
+        db.ref("tokens/" + num).update({ status: "ready" })
+          .then(() => { toast(`Buzzed #${num}`); addLog(num, "Ready"); });
+      }
+
+      function removeToken(num) {
+        db.ref("tokens/" + num).remove()
+          .then(() => { toast(`Removed #${num}`); addLog(num, "Removed"); });
+      }
+
+      function listenToQueue() {
+        db.ref("tokens").orderByChild("createdAt").on("value", snap => {
+          const list = document.getElementById("tokenList");
+          const data = snap.val();
+          if (!data) { list.innerHTML = '<div class="empty-msg">No active orders</div>'; return; }
+
+          const sorted = Object.entries(data).sort((a, b) => a[1].createdAt - b[1].createdAt);
+          list.innerHTML = sorted.map(([num, info]) => {
+            const done = info.status === "ready";
+            return `<div class="token-item ${done ? "done" : ""}">
+              <div>
+                <div class="t-num">#${num}</div>
+                <div class="t-stat" style="color: ${done ? 'var(--green)' : 'var(--amber)'}">
+                  ${done ? "✨ Ready" : "⏳ Preparing"}
+                </div>
+              </div>
+              <div class="t-actions">
+                ${!done ? `<button class="btn btn-success" onclick="markReady('${num}')">Buzz</button>` : ""}
+                <button class="btn btn-ghost" onclick="removeToken('${num}')">✕</button>
+              </div>
+            </div>`;
+          }).join("");
+        });
+      }
+
       function toast(msg) {
         const el = document.getElementById("toast");
-        el.textContent = msg;
-        el.classList.add("show");
-        setTimeout(() => el.classList.remove("show"), 2800);
+        el.textContent = msg; el.classList.add("show");
+        setTimeout(() => el.classList.remove("show"), 3000);
       }
+
+      window.addEventListener('DOMContentLoaded', initLogs);
     </script>
   </body>
 </html>
