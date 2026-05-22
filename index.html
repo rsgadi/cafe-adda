@@ -469,6 +469,59 @@
         background: #20b857;
       }
 
+      /* ── Analytics Overlay ── */
+      #analyticsModal {
+        position: fixed; inset: 0;
+        background: rgba(14, 25, 14, 0.85);
+        backdrop-filter: blur(16px);
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        padding: 32px;
+      }
+      #analyticsModal.show {
+        display: flex;
+        animation: fadeInOverlay 0.5s ease forwards;
+      }
+      .analytics-content {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 32px;
+        padding: 48px;
+        text-align: center;
+        box-shadow: 0 32px 64px rgba(0,0,0,0.5), inset 0 2px 0 rgba(255,255,255,0.1);
+        width: 100%;
+        max-width: 500px;
+      }
+      .analytics-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin: 32px 0;
+      }
+      .analytics-stat {
+        background: rgba(0,0,0,0.3);
+        border: 1px solid var(--border);
+        padding: 24px;
+        border-radius: 16px;
+      }
+      .analytics-val {
+        font-size: 36px;
+        font-weight: 700;
+        color: var(--amber);
+        font-family: 'Playfair Display', serif;
+      }
+      .analytics-label {
+        font-size: 12px;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-top: 8px;
+        font-weight: 600;
+      }
+
       /* ── Staff Dashboard Layout ── */
       .dashboard-header {
         display: flex;
@@ -738,6 +791,35 @@
     <!-- Toast -->
     <div id="toast"></div>
 
+    <!-- Analytics Overlay -->
+    <div id="analyticsModal">
+      <div class="analytics-content">
+        <h2 style="font-family: 'Playfair Display', serif; font-size: 2.5rem; color: #fff; margin-bottom: 8px;">End of Day Report</h2>
+        <p style="color: var(--text-muted); font-size: 14px; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 24px;" id="analyticsDate">Today's Summary</p>
+        
+        <div class="analytics-grid">
+          <div class="analytics-stat">
+            <div class="analytics-val" id="statTotalIssued">0</div>
+            <div class="analytics-label">Total Issued</div>
+          </div>
+          <div class="analytics-stat">
+            <div class="analytics-val" id="statTotalCompleted" style="color: var(--green)">0</div>
+            <div class="analytics-label">Completed</div>
+          </div>
+          <div class="analytics-stat">
+            <div class="analytics-val" id="statTotalCancelled" style="color: var(--red)">0</div>
+            <div class="analytics-label">Cancelled</div>
+          </div>
+          <div class="analytics-stat">
+            <div class="analytics-val" id="statAvgWait" style="color: var(--text-main)">0m</div>
+            <div class="analytics-label">Avg Wait Time</div>
+          </div>
+        </div>
+
+        <button class="btn btn-outline" style="margin-top: 16px;" onclick="closeAnalyticsModal()">Close Report</button>
+      </div>
+    </div>
+
     <div class="layout-container">
       <div class="main-wrapper">
         <div class="app">
@@ -858,7 +940,11 @@
                   <span class="stat-value" id="statReady">0</span>
                   <span class="stat-label">Ready</span>
                 </div>
-                <button class="back-btn" style="color: var(--red); height: 100%" onclick="staffLogout()">Logout 🔓</button>
+                <div style="display: flex; flex-direction: column; gap: 8px; height: 100%;">
+                  <button class="back-btn" id="audioToggleBtn" style="flex: 1; justify-content: center; color: var(--amber);" onclick="toggleStaffAudio()">🔔 Audio On</button>
+                  <button class="back-btn" style="flex: 1; justify-content: center; color: var(--text-main);" onclick="showAnalyticsModal()">📊 End of Day</button>
+                  <button class="back-btn" style="flex: 1; justify-content: center; color: var(--red);" onclick="staffLogout()">🔓 Logout</button>
+                </div>
               </div>
             </div>
 
@@ -1187,8 +1273,10 @@
         if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
       }
 
+      let wakeLock = null;
+
       /* Tracking */
-      function startTracking() {
+      async function startTracking() {
         if (!CONFIGURED) return toast("⚠️ Firebase not configured");
         const num = document.getElementById("studentTokenInput").value.trim();
         if (!num) return toast("Please enter your token");
@@ -1196,6 +1284,20 @@
         document.getElementById("tokenEntryCard").style.display = "none";
         document.getElementById("waitingCard").style.display = "block";
         document.getElementById("waitTokenDisplay").textContent = num;
+
+        // Ask for Notification permission (Best Effort for Android/Desktop)
+        if ("Notification" in window && Notification.permission === "default") {
+          Notification.requestPermission();
+        }
+
+        // Request Screen Wake Lock
+        if ("wakeLock" in navigator) {
+          try {
+            wakeLock = await navigator.wakeLock.request('screen');
+          } catch (err) {
+            console.log("Wake Lock error:", err);
+          }
+        }
 
         activeRef = db.ref("tokens/" + num);
         activeListener = activeRef.on("value", snap => {
@@ -1209,6 +1311,12 @@
           activeRef.off("value", activeListener);
           activeRef = null; activeListener = null;
         }
+        
+        // Release Wake Lock
+        if (wakeLock !== null) {
+          wakeLock.release().then(() => wakeLock = null);
+        }
+
         document.getElementById("tokenEntryCard").style.display = "block";
         document.getElementById("waitingCard").style.display = "none";
         document.getElementById("studentTokenInput").value = "";
@@ -1218,8 +1326,18 @@
       function triggerReady(num) {
         document.getElementById("readyNum").textContent = "#" + num;
         document.getElementById("readyOverlay").classList.add("show");
+        
+        // Trigger Audio
         playChime();
         buzzTimer = setInterval(playChime, 6000);
+
+        // Trigger Notification
+        if ("Notification" in window && Notification.permission === "granted") {
+          new Notification("Order Ready! ✨", {
+            body: `Your token #${num} is ready for pickup at the counter!`,
+            icon: "/favicon.ico" // Will just use default if not present
+          });
+        }
       }
 
       function dismissReady() {
@@ -1284,6 +1402,69 @@
         });
       }
 
+      /* Staff Audio Toggle */
+      let staffAudioEnabled = true;
+      let lastKnownTokens = new Set(); // Track existing tokens to prevent chiming on initial load
+
+      function toggleStaffAudio() {
+        staffAudioEnabled = !staffAudioEnabled;
+        const btn = document.getElementById("audioToggleBtn");
+        if (staffAudioEnabled) {
+          btn.textContent = "🔔 Audio On";
+          btn.style.color = "var(--amber)";
+        } else {
+          btn.textContent = "🔕 Audio Off";
+          btn.style.color = "var(--text-muted)";
+        }
+      }
+
+      /* Analytics Logic */
+      function showAnalyticsModal() {
+        const modal = document.getElementById('analyticsModal');
+        if (!modal) return;
+
+        let issued = 0;
+        let completed = 0;
+        let cancelled = 0;
+        let totalWaitMs = 0;
+        let waitCount = 0;
+
+        const today = new Date().toDateString();
+
+        sessionOrders.forEach(order => {
+          // Only calculate for today's orders
+          if (new Date(order.createdAt).toDateString() !== today) return;
+
+          issued++;
+          if (order.status === 'completed') completed++;
+          if (order.status === 'cancelled') cancelled++;
+
+          if (order.history && order.history.issued && order.history.ready) {
+            totalWaitMs += (order.history.ready - order.history.issued);
+            waitCount++;
+          }
+        });
+
+        document.getElementById('statTotalIssued').textContent = issued;
+        document.getElementById('statTotalCompleted').textContent = completed;
+        document.getElementById('statTotalCancelled').textContent = cancelled;
+
+        if (waitCount > 0) {
+          const avgSec = Math.floor((totalWaitMs / waitCount) / 1000);
+          const mins = Math.floor(avgSec / 60);
+          const secs = avgSec % 60;
+          document.getElementById('statAvgWait').textContent = `${mins}m ${secs}s`;
+        } else {
+          document.getElementById('statAvgWait').textContent = "0m";
+        }
+
+        modal.classList.add('show');
+      }
+
+      function closeAnalyticsModal() {
+        document.getElementById('analyticsModal').classList.remove('show');
+      }
+
       function listenToQueue() {
         db.ref("tokens").orderByChild("createdAt").on("value", snap => {
           const prepList = document.getElementById("preparingList");
@@ -1297,6 +1478,7 @@
             readyList.innerHTML = '<div class="empty-msg">No ready orders</div>';
             document.getElementById("statPrep").textContent = "0";
             document.getElementById("statReady").textContent = "0";
+            lastKnownTokens.clear();
             return; 
           }
 
@@ -1306,10 +1488,21 @@
           let readyHTML = '';
           let prepCount = 0;
           let readyCount = 0;
+          
+          let newTokensFound = false;
 
           sorted.forEach(([num, info]) => {
             const isReady = info.status === "ready";
             
+            // Check for new token for Staff Chime
+            if (!lastKnownTokens.has(num)) {
+              lastKnownTokens.add(num);
+              // Don't chime on the very first load if there are multiple, but chime if it's an update
+              if (lastKnownTokens.size > Object.keys(data).length || Object.keys(data).length === 1 || lastKnownTokens.size > 1) {
+                  newTokensFound = true;
+              }
+            }
+
             if (isReady) {
               readyCount++;
               readyHTML += `
@@ -1340,6 +1533,14 @@
                 </div>`;
             }
           });
+          
+          // Cleanup deleted tokens from our known list
+          const currentKeys = new Set(Object.keys(data));
+          lastKnownTokens.forEach(k => { if (!currentKeys.has(k)) lastKnownTokens.delete(k); });
+
+          if (newTokensFound && staffAudioEnabled && document.getElementById('staffView').classList.contains('active')) {
+            playChime();
+          }
 
           prepList.innerHTML = prepHTML || '<div class="empty-msg">No active orders</div>';
           readyList.innerHTML = readyHTML || '<div class="empty-msg">No ready orders</div>';
