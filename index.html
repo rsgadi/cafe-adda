@@ -773,6 +773,9 @@
       <div class="blob blob-2"></div>
     </div>
 
+    <!-- Background Audio Alarm -->
+    <audio id="alarmAudio" loop preload="auto" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg"></audio>
+
     <!-- READY Overlay -->
     <div id="readyOverlay">
       <div class="ready-content">
@@ -782,8 +785,8 @@
         <div class="waiting-text" style="color: rgba(255,255,255,0.8);">
           Please head to the counter<br />to collect your freshly prepared order.
         </div>
-        <button class="btn-ready-dismiss" onclick="dismissReady()">
-          Collect Order
+        <button class="btn-ready-dismiss" onclick="studentConfirm()">
+          I have collected my order ✓
         </button>
       </div>
     </div>
@@ -882,6 +885,9 @@
               <div class="waiting-body">
                 <div class="label">Your Token</div>
                 <div class="token-big" id="waitTokenDisplay">00</div>
+                <div class="t-stat" style="justify-content: center; color: var(--amber); font-size: 14px; margin-bottom: 20px;">
+                  ⏳ Waiting: <span class="t-timer" id="studentWaitTimer" data-created="">00:00</span>
+                </div>
                 <div class="pulse-ring"></div>
                 <div class="waiting-text">
                   We're preparing your order.<br />
@@ -1274,6 +1280,7 @@
       }
 
       let wakeLock = null;
+      let currentReadyToken = null;
 
       /* Tracking */
       async function startTracking() {
@@ -1298,11 +1305,27 @@
             console.log("Wake Lock error:", err);
           }
         }
+        
+        // Initialize Audio to bypass auto-play restrictions on user interaction
+        const alarm = document.getElementById('alarmAudio');
+        if(alarm) alarm.load();
 
         activeRef = db.ref("tokens/" + num);
         activeListener = activeRef.on("value", snap => {
           const data = snap.val();
-          if (data && data.status === "ready") triggerReady(num);
+          if (data) {
+            const studentTimer = document.getElementById('studentWaitTimer');
+            if (studentTimer) studentTimer.setAttribute('data-created', data.createdAt);
+            
+            if (data.status === "ready") triggerReady(num);
+          } else {
+             // token deleted/completed from kitchen side
+             if (document.getElementById('waitingCard').style.display === 'block') {
+                 toast("Your token has been removed from the queue.");
+                 cancelTracking();
+                 showView("landingView");
+             }
+          }
         });
       }
 
@@ -1320,16 +1343,27 @@
         document.getElementById("tokenEntryCard").style.display = "block";
         document.getElementById("waitingCard").style.display = "none";
         document.getElementById("studentTokenInput").value = "";
+        
         clearInterval(buzzTimer);
+        const alarm = document.getElementById('alarmAudio');
+        if (alarm) {
+            alarm.pause();
+            alarm.currentTime = 0;
+        }
       }
 
       function triggerReady(num) {
+        currentReadyToken = num;
         document.getElementById("readyNum").textContent = "#" + num;
         document.getElementById("readyOverlay").classList.add("show");
         
-        // Trigger Audio
+        // Trigger Audio Loop
+        const alarm = document.getElementById('alarmAudio');
+        if (alarm) alarm.play().catch(e => console.log("Audio play blocked", e));
+        
+        // Fallback Chime just in case
         playChime();
-        buzzTimer = setInterval(playChime, 6000);
+        buzzTimer = setInterval(playChime, 2500);
 
         // Trigger Notification
         if ("Notification" in window && Notification.permission === "granted") {
@@ -1340,9 +1374,17 @@
         }
       }
 
+      function studentConfirm() {
+        if (currentReadyToken) {
+           removeToken(currentReadyToken, 'ready');
+        }
+        dismissReady();
+      }
+
       function dismissReady() {
         document.getElementById("readyOverlay").classList.remove("show");
-        clearInterval(buzzTimer); cancelTracking(); showView("landingView");
+        cancelTracking(); 
+        showView("landingView");
       }
 
       /* KDS Queue Management */
@@ -1559,7 +1601,11 @@
         setTimeout(() => el.classList.remove("show"), 3000);
       }
 
-      window.addEventListener('DOMContentLoaded', initLogs);
+      firebase.auth().onAuthStateChanged(user => {
+        if (user) {
+          initLogs();
+        }
+      });
     </script>
   </body>
 </html>
