@@ -607,9 +607,9 @@
       .log-date-header:first-child { margin-top: 0; }
 
       .log-item {
-        display: flex; align-items: center; gap: 14px;
+        display: flex; align-items: flex-start; gap: 14px;
         background: rgba(0,0,0,0.3); border: 1px solid var(--border);
-        padding: 14px; border-radius: 16px;
+        padding: 16px; border-radius: 16px;
         transition: all 0.2s ease;
       }
       .log-item:hover { background: rgba(0,0,0,0.5); border-color: rgba(255,255,255,0.1); }
@@ -620,7 +620,7 @@
         font-size: 18px; flex-shrink: 0;
         background: rgba(0,0,0,0.5);
       }
-      .log-content-inner { flex: 1; }
+      .log-content-inner { flex: 1; width: 100%; }
 
       .log-item.issued .log-icon { color: var(--blue); box-shadow: 0 0 12px rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.3); }
       .log-item.ready .log-icon { color: var(--amber); box-shadow: 0 0 12px var(--amber-glow); border: 1px solid rgba(245, 166, 35, 0.3); }
@@ -629,11 +629,28 @@
 
       .log-header {
         display: flex; justify-content: space-between; align-items: center;
-        margin-bottom: 4px;
+        margin-bottom: 8px;
       }
       .log-title { font-weight: 700; font-size: 15px; color: var(--text-main); }
-      .log-time { font-size: 11px; color: var(--text-muted); font-weight: 600; }
-      .log-desc { font-size: 12px; color: var(--text-muted); }
+      .log-status-text { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; }
+      
+      .log-item.issued .log-status-text { color: var(--blue); }
+      .log-item.ready .log-status-text { color: var(--amber); }
+      .log-item.completed .log-status-text { color: var(--green); }
+      .log-item.cancelled .log-status-text { color: var(--red); }
+
+      .log-timeline {
+        display: flex; flex-direction: column; gap: 6px;
+        margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.05);
+        padding-top: 10px;
+      }
+      .timeline-step {
+        display: flex; justify-content: space-between; align-items: center;
+        font-size: 12px; color: var(--text-muted);
+      }
+      .timeline-step-label {
+        display: flex; align-items: center; gap: 6px;
+      }
 
       .sidebar-toggle {
         position: fixed; bottom: 32px; right: 32px;
@@ -919,45 +936,69 @@
         document.getElementById("configWarn").style.display = "block";
       }
 
-      /* Advanced Logging System (7 Days Retention) */
-      let sessionLogs = [];
-      const LOG_KEY = "cafeAdda_sessionLogs_v2";
+      /* Advanced Logging System (Consolidated Order Lifecycle) */
+      let sessionOrders = [];
+      const LOG_KEY = "cafeAdda_sessionOrders_v3";
 
       function initLogs() {
         const stored = localStorage.getItem(LOG_KEY);
         if (stored) {
           try {
-            sessionLogs = JSON.parse(stored);
-            // Retain up to 7 days
+            sessionOrders = JSON.parse(stored);
+            // Retain up to 7 days based on creation time
             const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
-            sessionLogs = sessionLogs.filter(log => log.timestamp > sevenDaysAgo);
-            localStorage.setItem(LOG_KEY, JSON.stringify(sessionLogs));
-          } catch(e) { sessionLogs = []; }
+            sessionOrders = sessionOrders.filter(order => order.createdAt > sevenDaysAgo);
+            localStorage.setItem(LOG_KEY, JSON.stringify(sessionOrders));
+          } catch(e) { sessionOrders = []; }
         }
         renderLogs();
       }
 
       function addLog(num, action) {
         // Actions: Issued, Ready, Completed, Cancelled
-        sessionLogs.push({ num, action, timestamp: Date.now() });
-        localStorage.setItem(LOG_KEY, JSON.stringify(sessionLogs));
+        const now = Date.now();
+        
+        if (action === 'Issued') {
+          sessionOrders.push({
+            id: now,
+            num: num,
+            status: 'issued',
+            createdAt: now,
+            history: { issued: now }
+          });
+        } else {
+          // Find the most recent active order for this token
+          // Since it's an array, we search from the end
+          for (let i = sessionOrders.length - 1; i >= 0; i--) {
+            let order = sessionOrders[i];
+            if (order.num === num && (order.status === 'issued' || order.status === 'ready')) {
+              order.status = action.toLowerCase();
+              if (!order.history) order.history = {};
+              order.history[order.status] = now;
+              order.updatedAt = now;
+              break;
+            }
+          }
+        }
+        
+        localStorage.setItem(LOG_KEY, JSON.stringify(sessionOrders));
         renderLogs();
       }
 
       function renderLogs() {
         const logSidebar = document.getElementById('logContent');
         if (!logSidebar) return;
-        if (sessionLogs.length === 0) {
+        if (sessionOrders.length === 0) {
           logSidebar.innerHTML = '<div class="empty-msg">No activity recorded yet.</div>';
           return;
         }
 
-        const sorted = [...sessionLogs].sort((a, b) => b.timestamp - a.timestamp);
+        const sorted = [...sessionOrders].sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt));
         
-        // Group by Date
+        // Group by Date (based on createdAt to keep orders in their original day)
         const groups = {};
-        sorted.forEach(log => {
-          const d = new Date(log.timestamp);
+        sorted.forEach(order => {
+          const d = new Date(order.createdAt);
           let dateStr = d.toLocaleDateString();
           const today = new Date().toLocaleDateString();
           const yesterday = new Date(Date.now() - 86400000).toLocaleDateString();
@@ -967,28 +1008,51 @@
           else dateStr = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
           
           if (!groups[dateStr]) groups[dateStr] = [];
-          groups[dateStr].push(log);
+          groups[dateStr].push(order);
         });
 
         let html = '';
-        for (const [date, logs] of Object.entries(groups)) {
+        for (const [date, orders] of Object.entries(groups)) {
           html += `<div class="log-date-header">${date}</div>`;
-          html += logs.map(log => {
-            let c = '', i = '', d = '';
-            if (log.action === 'Issued') { c = 'issued'; i = '📝'; d = 'Added to queue'; }
-            if (log.action === 'Ready') { c = 'ready'; i = '✨'; d = 'Notified customer'; }
-            if (log.action === 'Completed') { c = 'completed'; i = '✅'; d = 'Handed over'; }
-            if (log.action === 'Cancelled') { c = 'cancelled'; i = '🚫'; d = 'Removed early'; }
+          html += orders.map(order => {
+            let c = order.status; 
+            let i = ''; 
             
-            const t = new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            if (c === 'issued') i = '📝';
+            else if (c === 'ready') i = '✨';
+            else if (c === 'completed') i = '✅';
+            else if (c === 'cancelled') i = '🚫';
+            
+            // Build Timeline
+            let timelineHtml = '<div class="log-timeline">';
+            const h = order.history || {};
+            
+            if (h.issued) {
+              const t = new Date(h.issued).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              timelineHtml += `<div class="timeline-step"><span class="timeline-step-label">📝 Issued</span> <span>${t}</span></div>`;
+            }
+            if (h.ready) {
+              const t = new Date(h.ready).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              timelineHtml += `<div class="timeline-step"><span class="timeline-step-label">✨ Ready</span> <span>${t}</span></div>`;
+            }
+            if (h.completed) {
+              const t = new Date(h.completed).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              timelineHtml += `<div class="timeline-step"><span class="timeline-step-label" style="color:var(--green)">✅ Completed</span> <span>${t}</span></div>`;
+            }
+            if (h.cancelled) {
+              const t = new Date(h.cancelled).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              timelineHtml += `<div class="timeline-step"><span class="timeline-step-label" style="color:var(--red)">🚫 Cancelled</span> <span>${t}</span></div>`;
+            }
+            timelineHtml += '</div>';
+
             return `<div class="log-item ${c}">
               <div class="log-icon">${i}</div>
               <div class="log-content-inner">
                 <div class="log-header">
-                  <span class="log-title">Token #${log.num}</span>
-                  <span class="log-time">${t}</span>
+                  <span class="log-title">Token #${order.num}</span>
+                  <span class="log-status-text">${c}</span>
                 </div>
-                <div class="log-desc">${log.action}: ${d}</div>
+                ${timelineHtml}
               </div>
             </div>`;
           }).join('');
