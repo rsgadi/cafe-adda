@@ -936,53 +936,75 @@
         document.getElementById("configWarn").style.display = "block";
       }
 
-      /* Advanced Logging System (Consolidated Order Lifecycle) */
+      /* Advanced Logging System (Consolidated Order Lifecycle with Firebase) */
       let sessionOrders = [];
-      const LOG_KEY = "cafeAdda_sessionOrders_v3";
+      let historyRef = null;
+      let historyListener = null;
 
       function initLogs() {
-        const stored = localStorage.getItem(LOG_KEY);
-        if (stored) {
-          try {
-            sessionOrders = JSON.parse(stored);
-            // Retain up to 7 days based on creation time
+        if (!db) return;
+        historyRef = db.ref("orderHistory");
+        
+        historyListener = historyRef.on("value", snap => {
+          const data = snap.val();
+          sessionOrders = [];
+          
+          if (data) {
             const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
-            sessionOrders = sessionOrders.filter(order => order.createdAt > sevenDaysAgo);
-            localStorage.setItem(LOG_KEY, JSON.stringify(sessionOrders));
-          } catch(e) { sessionOrders = []; }
-        }
-        renderLogs();
+            const updates = {};
+            let needsPruning = false;
+
+            Object.entries(data).forEach(([key, order]) => {
+              if (order.createdAt > sevenDaysAgo) {
+                sessionOrders.push(order);
+              } else {
+                updates[key] = null; // Mark for deletion
+                needsPruning = true;
+              }
+            });
+
+            if (needsPruning) {
+              historyRef.update(updates);
+            }
+          }
+          renderLogs();
+        });
       }
 
       function addLog(num, action) {
-        // Actions: Issued, Ready, Completed, Cancelled
+        if (!db) return;
         const now = Date.now();
         
         if (action === 'Issued') {
-          sessionOrders.push({
-            id: now,
+          const newOrderRef = db.ref("orderHistory").push();
+          newOrderRef.set({
+            id: newOrderRef.key,
             num: num,
             status: 'issued',
             createdAt: now,
             history: { issued: now }
           });
         } else {
-          // Find the most recent active order for this token
-          // Since it's an array, we search from the end
+          // Since Firebase is async, we search our local sessionOrders array 
+          // to find the ID of the order we need to update.
+          let targetOrderId = null;
           for (let i = sessionOrders.length - 1; i >= 0; i--) {
             let order = sessionOrders[i];
             if (order.num === num && (order.status === 'issued' || order.status === 'ready')) {
-              order.status = action.toLowerCase();
-              if (!order.history) order.history = {};
-              order.history[order.status] = now;
-              order.updatedAt = now;
+              targetOrderId = order.id;
               break;
             }
           }
+
+          if (targetOrderId) {
+            const statusKey = action.toLowerCase();
+            db.ref(`orderHistory/${targetOrderId}`).update({
+              status: statusKey,
+              [`history/${statusKey}`]: now,
+              updatedAt: now
+            });
+          }
         }
-        
-        localStorage.setItem(LOG_KEY, JSON.stringify(sessionOrders));
-        renderLogs();
       }
 
       function renderLogs() {
