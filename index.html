@@ -560,7 +560,15 @@
         font-size: 12px;
         text-transform: uppercase; letter-spacing: 0.1em;
         margin-top: 6px; font-weight: 700;
+        display: flex; align-items: center; gap: 8px;
       }
+      .t-timer {
+        background: rgba(0,0,0,0.4); padding: 2px 6px; border-radius: 6px;
+        font-family: monospace; letter-spacing: 0; font-size: 11px;
+      }
+      .token-item.sla-warning { border-left-color: var(--amber); background: rgba(245, 166, 35, 0.05); }
+      .token-item.sla-critical { border-left-color: var(--red); background: rgba(239, 68, 68, 0.1); }
+      .token-item.sla-critical .t-timer { color: var(--red); background: rgba(239,68,68,0.2); }
       .t-actions { display: flex; gap: 8px; }
 
       /* ── Sidebar Advanced Log ── */
@@ -898,6 +906,7 @@
         <div class="sidebar-header">
           <h2>Audit Logs</h2>
           <p>Retaining 7 days of operational history</p>
+          <input type="number" id="logSearchInput" placeholder="🔍 Search Token No..." oninput="filterLogs()" style="margin-top: 16px; padding: 10px 16px; font-size: 14px; background: rgba(0,0,0,0.5);" />
         </div>
         <div class="sidebar-content" id="logContent">
           <!-- Logs injected here -->
@@ -1007,15 +1016,26 @@
         }
       }
 
+      function filterLogs() {
+        renderLogs();
+      }
+
       function renderLogs() {
         const logSidebar = document.getElementById('logContent');
         if (!logSidebar) return;
-        if (sessionOrders.length === 0) {
-          logSidebar.innerHTML = '<div class="empty-msg">No activity recorded yet.</div>';
+        
+        let displayOrders = [...sessionOrders];
+        const searchVal = document.getElementById('logSearchInput')?.value.trim();
+        if (searchVal) {
+          displayOrders = displayOrders.filter(o => String(o.num).includes(searchVal));
+        }
+
+        if (displayOrders.length === 0) {
+          logSidebar.innerHTML = '<div class="empty-msg">No activity matches search.</div>';
           return;
         }
 
-        const sorted = [...sessionOrders].sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt));
+        const sorted = displayOrders.sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt));
         
         // Group by Date (based on createdAt to keep orders in their original day)
         const groups = {};
@@ -1234,10 +1254,42 @@
           });
       }
 
+      let slaTimerInterval = null;
+
+      function updateSLATimers() {
+        const now = Date.now();
+        document.querySelectorAll('.t-timer').forEach(el => {
+          const createdAt = parseInt(el.getAttribute('data-created'), 10);
+          if (!createdAt) return;
+          
+          const diffMs = now - createdAt;
+          const diffSec = Math.floor(diffMs / 1000);
+          const mins = Math.floor(diffSec / 60);
+          const secs = diffSec % 60;
+          
+          el.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+          
+          const parentItem = el.closest('.token-item');
+          if (parentItem) {
+            if (mins >= 15) {
+              parentItem.classList.add('sla-critical');
+              parentItem.classList.remove('sla-warning');
+            } else if (mins >= 10) {
+              parentItem.classList.add('sla-warning');
+              parentItem.classList.remove('sla-critical');
+            } else {
+              parentItem.classList.remove('sla-warning', 'sla-critical');
+            }
+          }
+        });
+      }
+
       function listenToQueue() {
         db.ref("tokens").orderByChild("createdAt").on("value", snap => {
           const prepList = document.getElementById("preparingList");
           const readyList = document.getElementById("readyList");
+          
+          if (slaTimerInterval) clearInterval(slaTimerInterval);
           
           const data = snap.val();
           if (!data) { 
@@ -1276,7 +1328,10 @@
                 <div class="token-item prep-theme">
                   <div>
                     <div class="t-num">#${num}</div>
-                    <div class="t-stat" style="color: var(--amber)">⏳ Preparing</div>
+                    <div class="t-stat" style="color: var(--amber)">
+                      ⏳ Preparing 
+                      <span class="t-timer" data-created="${info.createdAt}">00:00</span>
+                    </div>
                   </div>
                   <div class="t-actions">
                     <button class="btn btn-success" onclick="markReady('${num}')">Buzz 🔔</button>
@@ -1291,6 +1346,9 @@
           
           document.getElementById("statPrep").textContent = prepCount;
           document.getElementById("statReady").textContent = readyCount;
+          
+          updateSLATimers();
+          slaTimerInterval = setInterval(updateSLATimers, 1000);
         });
       }
 
