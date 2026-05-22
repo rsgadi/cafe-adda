@@ -1086,25 +1086,28 @@
             history: { issued: now }
           });
         } else {
-          // Since Firebase is async, we search our local sessionOrders array 
-          // to find the ID of the order we need to update.
-          let targetOrderId = null;
-          for (let i = sessionOrders.length - 1; i >= 0; i--) {
-            let order = sessionOrders[i];
-            if (order.num === num && (order.status === 'issued' || order.status === 'ready')) {
-              targetOrderId = order.id;
-              break;
+          // Fetch the token's active history log from Firebase to update it
+          // This allows students (who don't have sessionOrders populated) to update it too.
+          db.ref("orderHistory").orderByChild("num").equalTo(num.toString()).once("value", snap => {
+            const data = snap.val();
+            if (data) {
+              let targetOrderId = null;
+              Object.entries(data).forEach(([key, order]) => {
+                if (order.status === 'issued' || order.status === 'ready') {
+                  targetOrderId = key;
+                }
+              });
+              
+              if (targetOrderId) {
+                const statusKey = action.toLowerCase();
+                db.ref(`orderHistory/${targetOrderId}`).update({
+                  status: statusKey,
+                  [`history/${statusKey}`]: now,
+                  updatedAt: now
+                });
+              }
             }
-          }
-
-          if (targetOrderId) {
-            const statusKey = action.toLowerCase();
-            db.ref(`orderHistory/${targetOrderId}`).update({
-              status: statusKey,
-              [`history/${statusKey}`]: now,
-              updatedAt: now
-            });
-          }
+          });
         }
       }
 
