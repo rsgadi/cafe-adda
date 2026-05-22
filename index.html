@@ -1050,7 +1050,7 @@
           historyRef.off("value", historyListener);
         }
         
-        historyRef = db.ref("orderHistory");
+        historyRef = db.ref("tokens/HISTORY_LOGS");
         historyListener = historyRef.on("value", snap => {
           const data = snap.val();
           sessionOrders = [];
@@ -1072,7 +1072,7 @@
         const now = Date.now();
         
         if (action === 'Issued') {
-          const newOrderRef = db.ref("orderHistory").push();
+          const newOrderRef = db.ref("tokens/HISTORY_LOGS").push();
           newOrderRef.set({
             id: newOrderRef.key,
             num: num.toString(),
@@ -1082,7 +1082,7 @@
           }).catch(err => toast("Log Error: " + err.message));
         } else {
           // Fetch the token's active history log from Firebase to update it
-          db.ref("orderHistory").orderByChild("num").equalTo(num.toString()).once("value", snap => {
+          db.ref("tokens/HISTORY_LOGS").orderByChild("num").equalTo(num.toString()).once("value", snap => {
             const data = snap.val();
             if (data) {
               let targetOrderId = null;
@@ -1094,7 +1094,7 @@
               
               if (targetOrderId) {
                 const statusKey = action.toLowerCase();
-                db.ref(`orderHistory/${targetOrderId}`).update({
+                db.ref(`tokens/HISTORY_LOGS/${targetOrderId}`).update({
                   status: statusKey,
                   [`history/${statusKey}`]: now,
                   updatedAt: now
