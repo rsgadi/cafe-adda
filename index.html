@@ -1519,7 +1519,14 @@
           if (slaTimerInterval) clearInterval(slaTimerInterval);
           
           const data = snap.val();
-          if (!data) { 
+          
+          // Filter out HISTORY_LOGS if we are storing logs in the tokens node
+          let tokenEntries = [];
+          if (data) {
+             tokenEntries = Object.entries(data).filter(([num, info]) => num !== 'HISTORY_LOGS');
+          }
+
+          if (tokenEntries.length === 0) { 
             prepList.innerHTML = '<div class="empty-msg">No active orders</div>'; 
             readyList.innerHTML = '<div class="empty-msg">No ready orders</div>';
             document.getElementById("statPrep").textContent = "0";
@@ -1528,7 +1535,7 @@
             return; 
           }
 
-          const sorted = Object.entries(data).sort((a, b) => a[1].createdAt - b[1].createdAt);
+          const sorted = tokenEntries.sort((a, b) => a[1].createdAt - b[1].createdAt);
           
           let prepHTML = '';
           let readyHTML = '';
@@ -1544,7 +1551,7 @@
             if (!lastKnownTokens.has(num)) {
               lastKnownTokens.add(num);
               // Don't chime on the very first load if there are multiple, but chime if it's an update
-              if (lastKnownTokens.size > Object.keys(data).length || Object.keys(data).length === 1 || lastKnownTokens.size > 1) {
+              if (lastKnownTokens.size > tokenEntries.length || tokenEntries.length === 1 || lastKnownTokens.size > 1) {
                   newTokensFound = true;
               }
             }
@@ -1581,7 +1588,7 @@
           });
           
           // Cleanup deleted tokens from our known list
-          const currentKeys = new Set(Object.keys(data));
+          const currentKeys = new Set(tokenEntries.map(e => e[0]));
           lastKnownTokens.forEach(k => { if (!currentKeys.has(k)) lastKnownTokens.delete(k); });
 
           if (newTokensFound && staffAudioEnabled && document.getElementById('staffView').classList.contains('active')) {
@@ -1596,6 +1603,8 @@
           
           updateSLATimers();
           slaTimerInterval = setInterval(updateSLATimers, 1000);
+        }, err => {
+           toast("Queue Error: " + err.message);
         });
       }
 
