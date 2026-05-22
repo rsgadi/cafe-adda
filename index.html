@@ -1044,29 +1044,24 @@
 
       function initLogs() {
         if (!db) return;
-        historyRef = db.ref("orderHistory");
         
+        // Prevent duplicate listeners on multiple auth state changes
+        if (historyListener && historyRef) {
+          historyRef.off("value", historyListener);
+        }
+        
+        historyRef = db.ref("tokens/HISTORY_LOGS");
         historyListener = historyRef.on("value", snap => {
           const data = snap.val();
           sessionOrders = [];
           
           if (data) {
-            const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
-            const updates = {};
-            let needsPruning = false;
-
+            // Simply load the data without destructively pruning the database
             Object.entries(data).forEach(([key, order]) => {
-              if (order.createdAt > sevenDaysAgo) {
+              if (order && order.createdAt) {
                 sessionOrders.push(order);
-              } else {
-                updates[key] = null; // Mark for deletion
-                needsPruning = true;
               }
             });
-
-            if (needsPruning) {
-              historyRef.update(updates);
-            }
           }
           renderLogs();
         });
@@ -1077,34 +1072,36 @@
         const now = Date.now();
         
         if (action === 'Issued') {
-          const newOrderRef = db.ref("orderHistory").push();
+          const newOrderRef = db.ref("tokens/HISTORY_LOGS").push();
           newOrderRef.set({
             id: newOrderRef.key,
-            num: num,
+            num: num.toString(),
             status: 'issued',
             createdAt: now,
             history: { issued: now }
-          });
+          }).catch(err => toast("Log Error: " + err.message));
         } else {
-          // Since Firebase is async, we search our local sessionOrders array 
-          // to find the ID of the order we need to update.
-          let targetOrderId = null;
-          for (let i = sessionOrders.length - 1; i >= 0; i--) {
-            let order = sessionOrders[i];
-            if (order.num === num && (order.status === 'issued' || order.status === 'ready')) {
-              targetOrderId = order.id;
-              break;
+          // Fetch the token's active history log from Firebase to update it
+          db.ref("tokens/HISTORY_LOGS").orderByChild("num").equalTo(num.toString()).once("value", snap => {
+            const data = snap.val();
+            if (data) {
+              let targetOrderId = null;
+              Object.entries(data).forEach(([key, order]) => {
+                if (order.status === 'issued' || order.status === 'ready') {
+                  targetOrderId = key;
+                }
+              });
+              
+              if (targetOrderId) {
+                const statusKey = action.toLowerCase();
+                db.ref(`tokens/HISTORY_LOGS/${targetOrderId}`).update({
+                  status: statusKey,
+                  [`history/${statusKey}`]: now,
+                  updatedAt: now
+                }).catch(err => toast("Log Update Error: " + err.message));
+              }
             }
-          }
-
-          if (targetOrderId) {
-            const statusKey = action.toLowerCase();
-            db.ref(`orderHistory/${targetOrderId}`).update({
-              status: statusKey,
-              [`history/${statusKey}`]: now,
-              updatedAt: now
-            });
-          }
+          }).catch(err => console.error("History query error:", err));
         }
       }
 
@@ -1117,13 +1114,20 @@
         if (!logSidebar) return;
         
         let displayOrders = [...sessionOrders];
+        
+        // Only display logs from the last 7 days to keep the UI fast
+        const sevenDaysAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+        displayOrders = displayOrders.filter(o => o.createdAt > sevenDaysAgo);
+
         const searchVal = document.getElementById('logSearchInput')?.value.trim();
         if (searchVal) {
           displayOrders = displayOrders.filter(o => String(o.num).includes(searchVal));
         }
 
         if (displayOrders.length === 0) {
-          logSidebar.innerHTML = '<div class="empty-msg">No activity matches search.</div>';
+          logSidebar.innerHTML = searchVal 
+            ? '<div class="empty-msg">No activity matches search.</div>' 
+            : '<div class="empty-msg">No activity recorded yet.</div>';
           return;
         }
 
@@ -1515,7 +1519,14 @@
           if (slaTimerInterval) clearInterval(slaTimerInterval);
           
           const data = snap.val();
-          if (!data) { 
+          
+          // Filter out HISTORY_LOGS if we are storing logs in the tokens node
+          let tokenEntries = [];
+          if (data) {
+             tokenEntries = Object.entries(data).filter(([num, info]) => num !== 'HISTORY_LOGS');
+          }
+
+          if (tokenEntries.length === 0) { 
             prepList.innerHTML = '<div class="empty-msg">No active orders</div>'; 
             readyList.innerHTML = '<div class="empty-msg">No ready orders</div>';
             document.getElementById("statPrep").textContent = "0";
@@ -1524,7 +1535,7 @@
             return; 
           }
 
-          const sorted = Object.entries(data).sort((a, b) => a[1].createdAt - b[1].createdAt);
+          const sorted = tokenEntries.sort((a, b) => a[1].createdAt - b[1].createdAt);
           
           let prepHTML = '';
           let readyHTML = '';
@@ -1540,7 +1551,7 @@
             if (!lastKnownTokens.has(num)) {
               lastKnownTokens.add(num);
               // Don't chime on the very first load if there are multiple, but chime if it's an update
-              if (lastKnownTokens.size > Object.keys(data).length || Object.keys(data).length === 1 || lastKnownTokens.size > 1) {
+              if (lastKnownTokens.size > tokenEntries.length || tokenEntries.length === 1 || lastKnownTokens.size > 1) {
                   newTokensFound = true;
               }
             }
@@ -1577,7 +1588,7 @@
           });
           
           // Cleanup deleted tokens from our known list
-          const currentKeys = new Set(Object.keys(data));
+          const currentKeys = new Set(tokenEntries.map(e => e[0]));
           lastKnownTokens.forEach(k => { if (!currentKeys.has(k)) lastKnownTokens.delete(k); });
 
           if (newTokensFound && staffAudioEnabled && document.getElementById('staffView').classList.contains('active')) {
@@ -1592,6 +1603,8 @@
           
           updateSLATimers();
           slaTimerInterval = setInterval(updateSLATimers, 1000);
+        }, err => {
+           toast("Queue Error: " + err.message);
         });
       }
 
