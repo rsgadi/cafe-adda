@@ -764,9 +764,52 @@
       .empty-msg { text-align: center; color: var(--text-muted); padding: 40px 0; font-size: 14px; }
       .error-msg { color: var(--red); font-size: 13px; margin-top: 12px; display: none; text-align: center; }
       .config-warn { background: rgba(245,166,35,0.1); border: 1px solid var(--amber); padding: 16px; border-radius: 14px; color: var(--amber); text-align: center; font-size: 13px; margin-top: 16px;}
+
+      @media (max-width: 640px) {
+        html, body { overflow: auto; }
+        .layout-container { min-height: 100svh; height: auto; }
+        .main-wrapper { min-height: 100svh; }
+        .app { justify-content: flex-start; padding: 56px 20px 32px; }
+        .view { gap: 18px; }
+        .logo h1 { font-size: clamp(2.7rem, 15vw, 3.8rem); }
+        .card { padding: 24px; border-radius: 22px; }
+        .role-btn { gap: 16px; padding: 22px; border-radius: 22px; }
+        .role-icon { width: 62px; height: 62px; }
+        .token-big { font-size: clamp(5rem, 28vw, 7rem); }
+        .ready-content, .analytics-content { padding: 28px 22px; border-radius: 26px; }
+        .analytics-grid { grid-template-columns: 1fr; margin: 24px 0; }
+        .dashboard-view { padding-top: 0; }
+        .dashboard-header .logo h1 { font-size: 2.3rem !important; }
+        .dashboard-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .dashboard-stats > div:last-child { grid-column: 1 / -1; }
+        .dashboard-grid { gap: 16px; }
+        .token-list { min-height: 180px; max-height: none; padding-right: 0; }
+        .token-item { align-items: flex-start; gap: 16px; flex-direction: column; }
+        .t-actions { width: 100%; }
+        .t-actions .btn { flex: 1; }
+        .sidebar { width: 100%; }
+        .sidebar-toggle { right: 20px; bottom: 20px; }
+      }
+      /* Offline Banner */
+      #offlineBanner {
+        position: fixed; top: 0; left: 0; right: 0;
+        background: var(--red); color: #fff;
+        text-align: center; padding: 10px;
+        font-size: 14px; font-weight: 600;
+        z-index: 10000;
+        transform: translateY(-100%);
+        transition: transform 0.3s ease;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      }
+      #offlineBanner.show {
+        transform: translateY(0);
+      }
     </style>
   </head>
   <body>
+    <!-- Offline Banner -->
+    <div id="offlineBanner">⚠️ No internet connection. Reconnecting...</div>
+
     <!-- Background Canvas -->
     <div class="bg-canvas">
       <div class="blob blob-1"></div>
@@ -1029,6 +1072,10 @@
       let activeListener = null;
       let activeRef = null;
       let buzzTimer = null;
+      let studentTimerInterval = null;
+      let queueRef = null;
+      let queueListener = null;
+      let queueHydrated = false;
 
       if (CONFIGURED) {
         firebase.initializeApp(firebaseConfig);
@@ -1041,6 +1088,33 @@
       let sessionOrders = [];
       let historyRef = null;
       let historyListener = null;
+
+      function normalizeToken(value) {
+        const token = String(value || "").trim();
+        return /^[1-9]\d{0,2}$/.test(token) ? token : null;
+      }
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, char => ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;"
+        }[char]));
+      }
+
+      function getValidTimestamp(value) {
+        const timestamp = Number(value);
+        return Number.isFinite(timestamp) && timestamp > 0 ? timestamp : null;
+      }
+
+      function formatElapsed(createdAt, now = Date.now()) {
+        const diffSec = Math.max(0, Math.floor((now - createdAt) / 1000));
+        const mins = Math.floor(diffSec / 60);
+        const secs = diffSec % 60;
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+      }
 
       function initLogs() {
         if (!db) return;
@@ -1153,8 +1227,10 @@
         for (const [date, orders] of Object.entries(groups)) {
           html += `<div class="log-date-header">${date}</div>`;
           html += orders.map(order => {
-            let c = order.status; 
+            let c = ['issued', 'ready', 'completed', 'cancelled'].includes(order.status) ? order.status : 'issued';
             let i = ''; 
+            const safeNum = escapeHtml(order.num);
+            const safeStatus = escapeHtml(c);
             
             if (c === 'issued') i = '📝';
             else if (c === 'ready') i = '✨';
@@ -1187,8 +1263,8 @@
               <div class="log-icon">${i}</div>
               <div class="log-content-inner">
                 <div class="log-header">
-                  <span class="log-title">Token #${order.num}</span>
-                  <span class="log-status-text">${c}</span>
+                  <span class="log-title">Token #${safeNum}</span>
+                  <span class="log-status-text">${safeStatus}</span>
                 </div>
                 ${timelineHtml}
               </div>
@@ -1259,13 +1335,19 @@
       function staffLogout() {
         if (!CONFIGURED) return;
         firebase.auth().signOut().then(() => {
-          if(db) db.ref("tokens").off();
+          detachQueueListener();
           toast("Logged out securely"); showView("landingView");
         });
       }
 
-      /* Audio Chime */
+      /* Audio Chime (Debounced) */
+      let lastChimeTime = 0;
       function playChime() {
+        const now = Date.now();
+        // 1.5 second debounce to prevent audio spam
+        if (now - lastChimeTime < 1500) return;
+        lastChimeTime = now;
+
         try {
           const ctx = new (window.AudioContext || window.webkitAudioContext)();
           [[523.25, 0], [659.25, 0.15], [880.00, 0.3]].forEach(([f, d]) => {
@@ -1283,18 +1365,78 @@
         if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
       }
 
-      let wakeLock = null;
+      /* Offline State Monitoring */
+      function monitorConnection() {
+        if (!db) return;
+        const banner = document.getElementById("offlineBanner");
+        db.ref(".info/connected").on("value", snap => {
+          if (snap.val() === true) {
+            banner.classList.remove("show");
+          } else {
+            banner.classList.add("show");
+          }
+        });
+      }
+
+      firebase.auth().onAuthStateChanged(user => {
+        if (user) {
+          initLogs();
+        }
+        monitorConnection();
+      });
       let currentReadyToken = null;
+
+      function stopStudentTimer() {
+        if (studentTimerInterval) {
+          clearInterval(studentTimerInterval);
+          studentTimerInterval = null;
+        }
+      }
+
+      function startStudentTimer(createdAt) {
+        const studentTimer = document.getElementById('studentWaitTimer');
+        if (!studentTimer) return;
+
+        studentTimer.setAttribute('data-created', createdAt);
+        const render = () => {
+          studentTimer.textContent = formatElapsed(createdAt);
+        };
+
+        stopStudentTimer();
+        render();
+        studentTimerInterval = setInterval(render, 1000);
+      }
 
       /* Tracking */
       async function startTracking() {
         if (!CONFIGURED) return toast("⚠️ Firebase not configured");
-        const num = document.getElementById("studentTokenInput").value.trim();
-        if (!num) return toast("Please enter your token");
+        const input = document.getElementById("studentTokenInput");
+        const num = normalizeToken(input.value);
+        if (!num) return toast("Enter a valid token number from 1 to 999");
+
+        let snap;
+        try {
+          snap = await db.ref("tokens/" + num).once("value");
+        } catch (err) {
+          return toast("Unable to check token. Try again.");
+        }
+
+        const initialData = snap.val();
+        if (!initialData || !initialData.status) {
+          return toast(`Token #${num} is not in the queue yet`);
+        }
+
+        const createdAt = getValidTimestamp(initialData.createdAt);
+        if (!createdAt) {
+          return toast(`Token #${num} is missing its start time`);
+        }
+
+        if (activeRef && activeListener) cancelTracking();
 
         document.getElementById("tokenEntryCard").style.display = "none";
         document.getElementById("waitingCard").style.display = "block";
         document.getElementById("waitTokenDisplay").textContent = num;
+        startStudentTimer(createdAt);
 
         // Ask for Notification permission (Best Effort for Android/Desktop)
         if ("Notification" in window && Notification.permission === "default") {
@@ -1318,8 +1460,8 @@
         activeListener = activeRef.on("value", snap => {
           const data = snap.val();
           if (data) {
-            const studentTimer = document.getElementById('studentWaitTimer');
-            if (studentTimer) studentTimer.setAttribute('data-created', data.createdAt);
+            const updatedCreatedAt = getValidTimestamp(data.createdAt);
+            if (updatedCreatedAt) startStudentTimer(updatedCreatedAt);
             
             if (data.status === "ready") triggerReady(num);
           } else {
@@ -1347,8 +1489,13 @@
         document.getElementById("tokenEntryCard").style.display = "block";
         document.getElementById("waitingCard").style.display = "none";
         document.getElementById("studentTokenInput").value = "";
+        stopStudentTimer();
+        document.getElementById('studentWaitTimer').textContent = "00:00";
+        document.getElementById('studentWaitTimer').setAttribute('data-created', "");
         
         clearInterval(buzzTimer);
+        buzzTimer = null;
+        currentReadyToken = null;
         const alarm = document.getElementById('alarmAudio');
         if (alarm) {
             alarm.pause();
@@ -1357,6 +1504,8 @@
       }
 
       function triggerReady(num) {
+        if (currentReadyToken === num) return;
+        clearInterval(buzzTimer);
         currentReadyToken = num;
         document.getElementById("readyNum").textContent = "#" + num;
         document.getElementById("readyOverlay").classList.add("show");
@@ -1394,19 +1543,35 @@
       /* KDS Queue Management */
       function addToken() {
         if (!CONFIGURED) return;
-        const num = document.getElementById("newTokenInput").value.trim();
-        if (!num) return toast("Enter token number");
-        db.ref("tokens/" + num).set({ status: "waiting", createdAt: Date.now() })
-          .then(() => {
+        const input = document.getElementById("newTokenInput");
+        const num = normalizeToken(input.value);
+        if (!num) return toast("Enter a token number from 1 to 999");
+
+        const tokenRef = db.ref("tokens/" + num);
+        tokenRef.once("value")
+          .then(snap => {
+            if (snap.exists()) {
+              toast(`Token #${num} is already active`);
+              return null;
+            }
+            return tokenRef.set({
+              status: "waiting",
+              createdAt: firebase.database.ServerValue.TIMESTAMP
+            });
+          })
+          .then(result => {
+            if (result === null) return;
             toast(`Token #${num} added`);
-            document.getElementById("newTokenInput").value = "";
+            input.value = "";
             addLog(num, "Issued");
-          });
+          })
+          .catch(err => toast("Could not issue token: " + err.message));
       }
 
       function markReady(num) {
         db.ref("tokens/" + num).update({ status: "ready" })
-          .then(() => { toast(`Buzzed #${num}`); addLog(num, "Ready"); });
+          .then(() => { toast(`Buzzed #${num}`); addLog(num, "Ready"); })
+          .catch(err => toast("Could not buzz token: " + err.message));
       }
 
       function removeToken(num, currentStatus) {
@@ -1415,7 +1580,8 @@
             const isCompleted = currentStatus === 'ready';
             toast(isCompleted ? `Order #${num} Completed` : `Token #${num} Cancelled`); 
             addLog(num, isCompleted ? "Completed" : "Cancelled"); 
-          });
+          })
+          .catch(err => toast("Could not update token: " + err.message));
       }
 
       let slaTimerInterval = null;
@@ -1423,15 +1589,12 @@
       function updateSLATimers() {
         const now = Date.now();
         document.querySelectorAll('.t-timer').forEach(el => {
-          const createdAt = parseInt(el.getAttribute('data-created'), 10);
+          const createdAt = getValidTimestamp(el.getAttribute('data-created'));
           if (!createdAt) return;
           
-          const diffMs = now - createdAt;
-          const diffSec = Math.floor(diffMs / 1000);
+          const diffSec = Math.max(0, Math.floor((now - createdAt) / 1000));
           const mins = Math.floor(diffSec / 60);
-          const secs = diffSec % 60;
-          
-          el.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+          el.textContent = formatElapsed(createdAt, now);
           
           const parentItem = el.closest('.token-item');
           if (parentItem) {
@@ -1511,8 +1674,24 @@
         document.getElementById('analyticsModal').classList.remove('show');
       }
 
+      function detachQueueListener() {
+        if (queueRef && queueListener) {
+          queueRef.off("value", queueListener);
+        }
+        queueRef = null;
+        queueListener = null;
+        queueHydrated = false;
+        lastKnownTokens.clear();
+        if (slaTimerInterval) {
+          clearInterval(slaTimerInterval);
+          slaTimerInterval = null;
+        }
+      }
+
       function listenToQueue() {
-        db.ref("tokens").orderByChild("createdAt").on("value", snap => {
+        detachQueueListener();
+        queueRef = db.ref("tokens").orderByChild("createdAt");
+        queueListener = snap => {
           const prepList = document.getElementById("preparingList");
           const readyList = document.getElementById("readyList");
           
@@ -1523,7 +1702,12 @@
           // Filter out HISTORY_LOGS if we are storing logs in the tokens node
           let tokenEntries = [];
           if (data) {
-             tokenEntries = Object.entries(data).filter(([num, info]) => num !== 'HISTORY_LOGS');
+             tokenEntries = Object.entries(data).filter(([num, info]) => (
+               num !== 'HISTORY_LOGS' &&
+               normalizeToken(num) &&
+               info &&
+               Number.isFinite(Number(info.createdAt))
+             ));
           }
 
           if (tokenEntries.length === 0) { 
@@ -1532,6 +1716,7 @@
             document.getElementById("statPrep").textContent = "0";
             document.getElementById("statReady").textContent = "0";
             lastKnownTokens.clear();
+            queueHydrated = true;
             return; 
           }
 
@@ -1546,14 +1731,12 @@
 
           sorted.forEach(([num, info]) => {
             const isReady = info.status === "ready";
+            const safeNum = escapeHtml(num);
             
             // Check for new token for Staff Chime
             if (!lastKnownTokens.has(num)) {
               lastKnownTokens.add(num);
-              // Don't chime on the very first load if there are multiple, but chime if it's an update
-              if (lastKnownTokens.size > tokenEntries.length || tokenEntries.length === 1 || lastKnownTokens.size > 1) {
-                  newTokensFound = true;
-              }
+              if (queueHydrated) newTokensFound = true;
             }
 
             if (isReady) {
@@ -1561,7 +1744,7 @@
               readyHTML += `
                 <div class="token-item ready-theme">
                   <div>
-                    <div class="t-num">#${num}</div>
+                    <div class="t-num">#${safeNum}</div>
                     <div class="t-stat" style="color: var(--green)">✨ Awaiting Pickup</div>
                   </div>
                   <div class="t-actions">
@@ -1573,7 +1756,7 @@
               prepHTML += `
                 <div class="token-item prep-theme">
                   <div>
-                    <div class="t-num">#${num}</div>
+                    <div class="t-num">#${safeNum}</div>
                     <div class="t-stat" style="color: var(--amber)">
                       ⏳ Preparing 
                       <span class="t-timer" data-created="${info.createdAt}">00:00</span>
@@ -1600,10 +1783,12 @@
           
           document.getElementById("statPrep").textContent = prepCount;
           document.getElementById("statReady").textContent = readyCount;
+          queueHydrated = true;
           
           updateSLATimers();
           slaTimerInterval = setInterval(updateSLATimers, 1000);
-        }, err => {
+        };
+        queueRef.on("value", queueListener, err => {
            toast("Queue Error: " + err.message);
         });
       }
